@@ -66,6 +66,12 @@ export function RecipeManagement() {
 
   const totalQuantity = materialsRows.reduce((sum, row) => sum + (Number(row.quantity) || 0), 0);
   const canSave = totalQuantity === 100 && selectedProduct && selectedFlavour;
+  const duplicateVersionExists = recipes.some(recipe => {
+    const sameFlavour = recipe.flavourId === selectedFlavour;
+    const sameVersion = recipe.version.trim().toLowerCase() === version.trim().toLowerCase();
+    const differentRecord = recipe.id !== editingRecipeId;
+    return sameFlavour && sameVersion && differentRecord;
+  });
 
   const resetForm = () => {
     setEditingRecipeId('');
@@ -117,6 +123,10 @@ export function RecipeManagement() {
 
   const saveRecipe = () => {
     const total = materialsRows.reduce((sum, row) => sum + (Number(row.quantity) || 0), 0);
+    if (duplicateVersionExists) {
+      setStatusMessage('Recipe version must be unique for the selected flavour.');
+      return;
+    }
     if (total !== 100) {
       setStatusMessage('Recipe must total exactly 100g before saving.');
       return;
@@ -514,7 +524,7 @@ export function RecipeManagement() {
                         <Select value={row.materialId} onValueChange={(value) => setPackagingRows(prev => prev.map((currentRow, currentIndex) => currentIndex === index ? { ...currentRow, materialId: value } : currentRow))}>
                           <SelectTrigger><SelectValue placeholder="Select Packaging Material" /></SelectTrigger>
                           <SelectContent>
-                            {materials.filter(material => material.type === 'Packaging Material').map(material => <SelectItem key={material.id} value={material.id}>{material.name}</SelectItem>)}
+                            {materials.filter(material => material.type === 'Packaging Material' && !material.name.toLowerCase().includes('box')).map(material => <SelectItem key={material.id} value={material.id}>{material.name}</SelectItem>)}
                           </SelectContent>
                         </Select>
                       </TableCell>
@@ -553,6 +563,9 @@ export function RecipeManagement() {
               <Button variant="outline" onClick={() => setStatusMessage('')}>Clear Status</Button>
               {editingRecipeId ? <Button variant="outline" onClick={resetForm}>New Version</Button> : null}
               <span className="text-sm text-muted-foreground">{statusMessage || 'Recipes remain editable. Formula updates whenever you edit and save.'}</span>
+            </div>
+            <div className={`rounded-md border px-3 py-2 text-sm ${totalQuantity === 100 ? 'border-green-200 bg-green-50 text-green-700' : 'border-amber-200 bg-amber-50 text-amber-700'}`}>
+              Current ingredient total: {totalQuantity} g {totalQuantity === 100 ? '(ready to save)' : '(must equal 100 g)'}
             </div>
           </div>
         </CardContent>

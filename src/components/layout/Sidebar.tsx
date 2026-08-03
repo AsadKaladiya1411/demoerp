@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { LayoutDashboard, Package, Tag, Factory, Settings, FileText, PackageOpen, ClipboardList } from 'lucide-react';
+import { LayoutDashboard, Package, Tag, Factory, Settings, FileText, PackageOpen, ClipboardList, Inbox, ArrowRightLeft, CornerDownLeft, Shuffle, FlaskConical, Store } from 'lucide-react';
 import { useAuth, type Permission } from '@/context/AuthContext';
 
 export function Sidebar() {
@@ -14,17 +14,34 @@ export function Sidebar() {
     
     { name: 'Manufacturers', href: '/masters/manufacturers', icon: Factory, permission: 'manufacturers' },
     { name: 'Material Master', href: '/masters/materials', icon: Settings, permission: 'materials' },
+    { name: 'Vendor Management', href: '/masters/vendors', icon: Store, permission: 'vendors' },
     
     { name: 'Reports', href: '/reports', icon: FileText, permission: 'reports' },
     { name: 'Master Report', href: '/master-report', icon: FileText, permission: 'masterReport' },
   ];
   const employeeBLinks: { name: string; href: string; icon: typeof LayoutDashboard; permission: Permission }[] = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard, permission: 'dashboard' },
+    { name: 'Vendor Management', href: '/masters/vendors', icon: Store, permission: 'vendors' },
     { name: 'RM Requirement', href: '/employee-b/rm-requirement', icon: PackageOpen, permission: 'employeeBRm' },
     { name: 'PM Requirement', href: '/employee-b/pm-requirement', icon: ClipboardList, permission: 'employeeBPm' },
     { name: 'Reports', href: '/reports', icon: FileText, permission: 'reports' },
+    { name: 'Master Report', href: '/employee-b/master-report', icon: FileText, permission: 'employeeBMasterReport' },
   ];
-  const links = currentUser.role === 'Employee B' ? employeeBLinks : defaultLinks;
+  const employeeCLinks: { name: string; href: string; icon: typeof LayoutDashboard; permission: Permission }[] = [
+    { name: 'Dashboard', href: '/', icon: LayoutDashboard, permission: 'dashboard' },
+    { name: 'Vendor Management', href: '/masters/vendors', icon: Store, permission: 'vendors' },
+    { name: 'Goods Receipt', href: '/employee-c/goods-receipt', icon: Inbox, permission: 'employeeCGrn' },
+    { name: 'Production Issue', href: '/employee-c/production-issue', icon: ArrowRightLeft, permission: 'employeeCIssue' },
+    { name: 'Production Return', href: '/employee-c/production-return', icon: CornerDownLeft, permission: 'employeeCReturn' },
+    { name: 'Inventory Movement', href: '/inventory-movement', icon: Shuffle, permission: 'inventoryMovement' },
+    { name: 'Material Master', href: '/masters/materials', icon: Settings, permission: 'materials' },
+  ];
+  const employeeDLinks: { name: string; href: string; icon: typeof LayoutDashboard; permission: Permission }[] = [
+    { name: 'Dashboard', href: '/', icon: LayoutDashboard, permission: 'dashboard' },
+    { name: 'Vendor Management', href: '/masters/vendors', icon: Store, permission: 'vendors' },
+    { name: 'Pending Material Tests', href: '/employee-d/pending-material-tests', icon: FlaskConical, permission: 'employeeDPendingTests' },
+  ];
+  const links = currentUser.role === 'Employee B' ? employeeBLinks : currentUser.role === 'Employee C' ? employeeCLinks : currentUser.role === 'Employee D' ? employeeDLinks : defaultLinks;
 
   return (
     <div className="flex h-screen w-64 flex-col border-r bg-card text-card-foreground">

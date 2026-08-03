@@ -15,6 +15,11 @@ import type { Recipe } from '@/context/ErpContext';
 type IngredientRow = { materialId: string; quantity: string; unit: string; make: string };
 type PackagingRow = { materialId: string; unit: 'Nos' | 'Roll'; count: string; rollWeightKg: string; emptySachetWeightG: string; wastagePercent: string };
 
+function isSachetMaterialName(name: string) {
+  const normalized = name.toLowerCase();
+  return normalized.includes('sachet') || normalized.includes('film') || normalized.includes('pouch');
+}
+
 export function FlavourDetails() {
   const { productId, flavourId } = useParams();
   const navigate = useNavigate();
@@ -88,6 +93,7 @@ export function FlavourDetails() {
   }, [productionCalculations, selectedRecipe]);
 
   const ingredientTotal = ingredients.reduce((sum, row) => sum + (Number(row.quantity) || 0), 0);
+  const duplicateVersionExists = flavourRecipes.some(recipe => recipe.version.trim().toLowerCase() === version.trim().toLowerCase() && recipe.id !== selectedRecipe?.id);
   const productionQuantityKg = Number(productionKg) || 0;
   const productionSummary = selectedRecipe && productionQuantityKg > 0
     ? productionLib.calculateProduction(selectedRecipe, materials, productionQuantityKg)
@@ -104,6 +110,39 @@ export function FlavourDetails() {
   const flavouredBoxes = flavouredBoxCapacityValue > 0 ? Math.floor(flavouredSachets / flavouredBoxCapacityValue) : 0;
   const sachetKgWeightValue = Number(sachetKgWeight) || 0;
   const requiredSachetKg = Number(((finishedSachets * sachetKgWeightValue) / 1000).toFixed(6));
+
+  const updatePackagingMaterial = (index: number, materialId: string) => {
+    const selectedMaterial = materials.find(item => item.id === materialId);
+    const selectedIsSachet = selectedMaterial ? isSachetMaterialName(selectedMaterial.name) : false;
+    setPackagingRows(prev => {
+      const next = selectedIsSachet
+        ? prev.filter((row, currentIndex) => {
+            if (currentIndex === index) return true;
+            const material = materials.find(item => item.id === row.materialId);
+            return !material || !isSachetMaterialName(material.name);
+          })
+        : prev;
+
+      return next.map((row, currentIndex) => {
+        if (currentIndex !== Math.min(index, next.length - 1)) return row;
+        return { ...row, materialId };
+      });
+    });
+  };
+
+  const updatePackagingUnit = (index: number, unit: 'Nos' | 'Roll') => {
+    setPackagingRows(prev => prev.map((row, currentIndex) => currentIndex === index
+      ? {
+          ...row,
+          unit,
+          count: unit === 'Nos' ? row.count : '',
+          rollWeightKg: unit === 'Roll' ? row.rollWeightKg : '',
+          emptySachetWeightG: unit === 'Roll' ? row.emptySachetWeightG : '',
+          wastagePercent: unit === 'Roll' ? row.wastagePercent : '',
+        }
+      : row
+    ));
+  };
 
   const finalReportRows = productionSummary
     ? [
@@ -129,6 +168,10 @@ export function FlavourDetails() {
       setStatusMessage('Recipe version is required.');
       return;
     }
+    if (duplicateVersionExists) {
+      setStatusMessage('Recipe version must be unique for this flavour.');
+      return;
+    }
     if (!servingSize.trim()) {
       setStatusMessage('Serving Size is required.');
       return;
@@ -149,6 +192,15 @@ export function FlavourDetails() {
       emptySachetWeightG: row.unit === 'Roll' && row.emptySachetWeightG ? Number(row.emptySachetWeightG) : undefined,
       wastagePercent: row.unit === 'Roll' && row.wastagePercent ? Number(row.wastagePercent) : undefined,
     }));
+
+    const sachetPackagingRows = packagingPayload.filter(row => {
+      const material = materials.find(item => item.id === row.materialId);
+      return material && isSachetMaterialName(material.name);
+    });
+    if (sachetPackagingRows.length > 1) {
+      setStatusMessage('Only one sachet packaging mode is allowed: Roll or Nos.');
+      return;
+    }
 
     for (const row of packagingPayload) {
       const material = materials.find(item => item.id === row.materialId);
@@ -354,15 +406,15 @@ export function FlavourDetails() {
               {packagingRows.map((row, index) => (
                 <TableRow key={`${row.materialId || 'packaging'}-${index}`}>
                   <TableCell>
-                    <Select value={row.materialId} onValueChange={value => setPackagingRows(prev => prev.map((item, currentIndex) => currentIndex === index ? { ...item, materialId: value } : item))}>
+                    <Select value={row.materialId} onValueChange={value => updatePackagingMaterial(index, value)}>
                       <SelectTrigger><SelectValue placeholder="Select Packaging Material" /></SelectTrigger>
                       <SelectContent>
-                        {materials.filter(item => item.type === 'Packaging Material').map(item => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}
+                        {materials.filter(item => item.type === 'Packaging Material' && !item.name.toLowerCase().includes('box')).map(item => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </TableCell>
                   <TableCell>
-                    <Select value={row.unit} onValueChange={value => setPackagingRows(prev => prev.map((item, currentIndex) => currentIndex === index ? { ...item, unit: value as 'Nos' | 'Roll' } : item))}>
+                    <Select value={row.unit} onValueChange={value => updatePackagingUnit(index, value as 'Nos' | 'Roll')}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Nos">Nos</SelectItem>

@@ -4,14 +4,12 @@ import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { motion } from 'framer-motion';
-import { Package, Box, Tag, FileText, Factory, Settings, CheckCircle, Clock, PackageOpen, Boxes, ClipboardList } from 'lucide-react';
-import { useAuth } from '@/context/AuthContext';
+import { Package, Box, Tag, FileText, Factory, Settings, CheckCircle, Clock } from 'lucide-react';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
 
 export function Dashboard() {
   const { categories, products, flavours, recipes, manufacturers, materials, productionPlans } = useErpData();
-  const { currentUser } = useAuth();
 
   const pendingApprovals = productionPlans.filter(p => p.status === 'Pending Approval').length;
   const trialProductions = productionPlans.filter(p => p.type === 'Trial').length;
@@ -39,78 +37,6 @@ export function Dashboard() {
     name: cat.name,
     value: products.filter(p => p.categoryId === cat.id).length
   }));
-
-  if (currentUser.role === 'Employee B') {
-    return (
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-3xl font-bold tracking-tight text-primary">Employee B Dashboard</h2>
-            <div className="text-sm text-muted-foreground">Requirement review flow</div>
-          </div>
-          <Button asChild>
-            <Link to="/reports">Open Reports</Link>
-          </Button>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <PackageOpen className="h-5 w-5 text-primary" />
-                RM Requirement
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="rounded-md border p-4">
-                <div className="font-medium">Raw Material</div>
-                <div className="text-sm text-muted-foreground">Total RM requirement from Employee A report.</div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <ClipboardList className="h-5 w-5 text-primary" />
-                PM Requirement
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="rounded-md border p-4">
-                <div className="font-medium">Sachets</div>
-                <div className="text-sm text-muted-foreground">Empty sachets / roll related requirement.</div>
-              </div>
-              <div className="rounded-md border p-4">
-                <div className="font-medium">Boxes</div>
-                <div className="text-sm text-muted-foreground">Flavoured and assorted box requirement.</div>
-              </div>
-              <div className="rounded-md border p-4">
-                <div className="font-medium">Additional Materials</div>
-                <div className="text-sm text-muted-foreground">Labels, cartons and other PM items.</div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Boxes className="h-5 w-5 text-primary" />
-              Employee B Flow
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-3 md:grid-cols-4">
-              {['Requirement Report', 'RM Requirement', 'PM Requirement', 'Manual Order Review'].map(item => (
-                <div key={item} className="rounded-md border p-4 text-sm font-medium">{item}</div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
-    );
-  }
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">

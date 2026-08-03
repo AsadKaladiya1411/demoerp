@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 
-export type Role = 'Boss' | 'Employee A' | 'Employee B' | 'Employee C';
+export type Role = 'Boss' | 'Employee A' | 'Employee B' | 'Employee C' | 'Employee D';
 export type Permission =
   | 'dashboard'
   | 'categories'
@@ -9,10 +9,17 @@ export type Permission =
   | 'assortedConfiguration'
   | 'manufacturers'
   | 'materials'
+  | 'vendors'
   | 'reports'
   | 'masterReport'
   | 'employeeBRm'
-  | 'employeeBPm';
+  | 'employeeBPm'
+  | 'employeeBMasterReport'
+  | 'employeeCGrn'
+  | 'employeeCIssue'
+  | 'employeeCReturn'
+  | 'inventoryMovement'
+  | 'employeeDPendingTests';
 
 export interface AppUser {
   id: string;
@@ -33,13 +40,15 @@ const users: AppUser[] = [
   { id: 'employee-a', name: 'Employee A', role: 'Employee A' },
   { id: 'employee-b', name: 'Employee B', role: 'Employee B' },
   { id: 'employee-c', name: 'Employee C', role: 'Employee C' },
+  { id: 'employee-d', name: 'Employee D', role: 'Employee D' },
 ];
 
 const rolePermissions: Record<Role, Permission[]> = {
-  Boss: ['dashboard', 'categories', 'products', 'recipes', 'assortedConfiguration', 'manufacturers', 'materials', 'reports', 'masterReport', 'employeeBRm', 'employeeBPm'],
-  'Employee A': ['dashboard', 'categories', 'products', 'recipes', 'assortedConfiguration', 'manufacturers', 'materials', 'reports', 'masterReport'],
-  'Employee B': ['dashboard', 'employeeBRm', 'employeeBPm', 'reports', 'masterReport'],
-  'Employee C': ['dashboard', 'materials', 'masterReport'],
+  Boss: ['dashboard', 'categories', 'products', 'recipes', 'assortedConfiguration', 'manufacturers', 'materials', 'vendors', 'reports', 'masterReport', 'employeeBRm', 'employeeBPm', 'employeeBMasterReport', 'employeeCGrn', 'employeeCIssue', 'employeeCReturn', 'inventoryMovement', 'employeeDPendingTests'],
+  'Employee A': ['dashboard', 'categories', 'products', 'recipes', 'assortedConfiguration', 'reports', 'masterReport'],
+  'Employee B': ['dashboard', 'vendors', 'employeeBRm', 'employeeBPm', 'reports', 'employeeBMasterReport'],
+  'Employee C': ['dashboard', 'vendors', 'materials', 'masterReport', 'employeeCGrn', 'employeeCIssue', 'employeeCReturn', 'inventoryMovement'],
+  'Employee D': ['dashboard', 'vendors', 'employeeDPendingTests'],
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);

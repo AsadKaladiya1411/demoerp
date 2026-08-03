@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 export function AssortedConfiguration() {
   const { productId } = useParams();
   const navigate = useNavigate();
-  const { products, flavours, productionCalculations } = useErpData();
+  const { products, flavours, productionCalculations, upsertAssortedBoxCalculation } = useErpData();
 
   const product = products.find(item => item.id === productId);
   const productFlavours = useMemo(
@@ -20,6 +20,7 @@ export function AssortedConfiguration() {
   );
   const [selectedFlavourIds, setSelectedFlavourIds] = useState<string[]>([]);
   const [servingPerBox, setServingPerBox] = useState('');
+  const [statusMessage, setStatusMessage] = useState('');
 
   const rows = productFlavours.map(flavour => {
     const calculation = productionCalculations.find(item => item.productId === product?.id && item.flavourId === flavour.id);
@@ -43,6 +44,27 @@ export function AssortedConfiguration() {
         ? prev.filter(id => id !== flavourId)
         : [...prev, flavourId]
     );
+  };
+
+  const saveConfiguration = () => {
+    if (!product) return;
+    if (!canCalculate) {
+      setStatusMessage('Select at least 2 flavours for assorted box calculation.');
+      return;
+    }
+    if (servingPerBoxValue <= 0) {
+      setStatusMessage('Serving Per Box must be greater than zero.');
+      return;
+    }
+
+    upsertAssortedBoxCalculation({
+      productId: product.id,
+      selectedFlavourIds,
+      servingPerBox: servingPerBoxValue,
+      totalSelectedSachets: selectedSachets,
+      totalAssortedBoxes,
+    });
+    setStatusMessage('Assorted configuration saved.');
   };
 
   if (!product) {
@@ -125,6 +147,10 @@ export function AssortedConfiguration() {
               Select at least 2 flavours for assorted box calculation.
             </div>
           )}
+          <div className="flex flex-wrap items-center gap-3 border-t pt-4">
+            <Button onClick={saveConfiguration}>Save Assorted Configuration</Button>
+            <span className="text-sm text-muted-foreground">{statusMessage}</span>
+          </div>
         </CardContent>
       </Card>
     </motion.div>
