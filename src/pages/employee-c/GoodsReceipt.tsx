@@ -27,6 +27,8 @@ type GoodsReceiptRow = {
   unit: string;
   purchaseDate: string;
   receivedQuantity: number;
+  qaSampleQuantity: number;
+  availableQuantity: number;
   pendingQuantity: number;
   status: GoodsReceiptStatus;
 };
@@ -62,6 +64,7 @@ export function GoodsReceipt() {
   const isFormMode = Boolean(routeMaterialType && params.sourceId);
 
   const [receivedQuantity, setReceivedQuantity] = useState('');
+  const [qaSampleQuantity, setQaSampleQuantity] = useState('0');
   const [receivedDate, setReceivedDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [receivedBy, setReceivedBy] = useState(currentUser.name);
   const [remarks, setRemarks] = useState('');
@@ -83,6 +86,8 @@ export function GoodsReceipt() {
         unit: record.unit,
         purchaseDate: record.purchaseDate || formatDate(record.expectedDeliveryDateTime),
         receivedQuantity: 0,
+        qaSampleQuantity: 0,
+        availableQuantity: 0,
         pendingQuantity: purchaseQuantity,
         status: 'Pending',
       });
@@ -102,6 +107,8 @@ export function GoodsReceipt() {
         unit: record.purchaseUnit,
         purchaseDate: record.purchaseDate || formatDate(record.expectedDeliveryDateTime),
         receivedQuantity: 0,
+        qaSampleQuantity: 0,
+        availableQuantity: 0,
         pendingQuantity: purchaseQuantity,
         status: 'Pending',
       });
@@ -125,6 +132,8 @@ export function GoodsReceipt() {
           unit: 'Nos',
           purchaseDate: record.purchaseDate || formatDate(record.expectedDeliveryDateTime),
           receivedQuantity: 0,
+          qaSampleQuantity: 0,
+          availableQuantity: 0,
           pendingQuantity: flavouredQuantity,
           status: 'Pending',
         });
@@ -144,6 +153,8 @@ export function GoodsReceipt() {
           unit: 'Nos',
           purchaseDate: record.purchaseDate || formatDate(record.expectedDeliveryDateTime),
           receivedQuantity: 0,
+          qaSampleQuantity: 0,
+          availableQuantity: 0,
           pendingQuantity: assortedQuantity,
           status: 'Pending',
         });
@@ -152,9 +163,11 @@ export function GoodsReceipt() {
 
     return rows
       .map(row => {
-        const receivedQuantityTotal = goodsReceiptRecords
-          .filter(record => record.sourceType === row.sourceType && record.sourceId === row.sourceId && (record.lineType || undefined) === (row.lineType || undefined))
-          .reduce((sum, record) => sum + record.receivedQuantity, 0);
+        const rowReceipts = goodsReceiptRecords
+          .filter(record => record.sourceType === row.sourceType && record.sourceId === row.sourceId && (record.lineType || undefined) === (row.lineType || undefined));
+        const receivedQuantityTotal = rowReceipts.reduce((sum, record) => sum + record.receivedQuantity, 0);
+        const qaSampleQuantityTotal = rowReceipts.reduce((sum, record) => sum + (record.qaSampleQuantity ?? 0), 0);
+        const availableQuantityTotal = rowReceipts.reduce((sum, record) => sum + (record.availableQuantity ?? Math.max(0, record.receivedQuantity - (record.qaSampleQuantity ?? 0))), 0);
         const status: GoodsReceiptStatus = receivedQuantityTotal <= 0
           ? 'Pending'
           : receivedQuantityTotal < row.purchaseQuantity
@@ -164,6 +177,8 @@ export function GoodsReceipt() {
         return {
           ...row,
           receivedQuantity: receivedQuantityTotal,
+          qaSampleQuantity: qaSampleQuantityTotal,
+          availableQuantity: availableQuantityTotal,
           pendingQuantity: Math.max(0, row.purchaseQuantity - receivedQuantityTotal),
           status,
         };
@@ -188,6 +203,7 @@ export function GoodsReceipt() {
     if (!currentRow || !isFormMode) return;
 
     setReceivedQuantity(currentRow.pendingQuantity > 0 ? String(currentRow.pendingQuantity) : '');
+    setQaSampleQuantity('0');
     setReceivedDate(new Date().toISOString().slice(0, 10));
     setReceivedBy(currentUser.name);
     setRemarks('');
@@ -203,12 +219,26 @@ export function GoodsReceipt() {
     if (!currentRow) return;
 
     const quantity = Number(receivedQuantity) || 0;
+    const sampleQuantity = Number(qaSampleQuantity) || 0;
+    const availableQuantity = Math.max(0, quantity - sampleQuantity);
     if (quantity <= 0) {
       setMessage('Received Quantity must be greater than zero.');
       return;
     }
     if (quantity > currentRow.pendingQuantity) {
       setMessage('Received Quantity cannot exceed Pending Quantity.');
+      return;
+    }
+    if (sampleQuantity < 0) {
+      setMessage('QA Sample Quantity cannot be negative.');
+      return;
+    }
+    if (sampleQuantity > quantity) {
+      setMessage('QA Sample Quantity cannot exceed Received Quantity.');
+      return;
+    }
+    if (availableQuantity < 0) {
+      setMessage('Available Quantity cannot become negative.');
       return;
     }
     if (!receivedBy.trim()) {
@@ -227,6 +257,7 @@ export function GoodsReceipt() {
       unit: currentRow.unit,
       purchaseDate: currentRow.purchaseDate,
       receivedQuantity: quantity,
+      qaSampleQuantity: sampleQuantity,
       receivedDate,
       receivedBy: receivedBy.trim(),
       remarks: remarks.trim(),
@@ -334,6 +365,14 @@ export function GoodsReceipt() {
                 <Input type="number" min="0" max={currentRow.pendingQuantity} value={receivedQuantity} onChange={event => setReceivedQuantity(event.target.value)} />
               </div>
               <div className="space-y-2">
+                <Label>QA Sample Quantity</Label>
+                <Input type="number" min="0" value={qaSampleQuantity} onChange={event => setQaSampleQuantity(event.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>Available Quantity</Label>
+                <Input readOnly value={Math.max(0, (Number(receivedQuantity) || 0) - (Number(qaSampleQuantity) || 0))} className="bg-muted/60" />
+              </div>
+              <div className="space-y-2">
                 <Label>Received Date</Label>
                 <Input type="date" value={receivedDate} onChange={event => setReceivedDate(event.target.value)} />
               </div>
@@ -357,7 +396,7 @@ export function GoodsReceipt() {
               <div className="grid gap-3 text-sm md:grid-cols-3">
                 <div className="flex items-center gap-2 text-muted-foreground"><CalendarDays className="h-4 w-4" /> Received Date: <span className="font-medium text-foreground">{formatDate(receivedDate)}</span></div>
                 <div className="flex items-center gap-2 text-muted-foreground"><User className="h-4 w-4" /> Received By: <span className="font-medium text-foreground">{receivedBy || '-'}</span></div>
-                <div className="flex items-center gap-2 text-muted-foreground"><PackageCheck className="h-4 w-4" /> Pending after save: <span className="font-medium text-foreground">{Math.max(0, currentRow.pendingQuantity - (Number(receivedQuantity) || 0))} {currentRow.unit}</span></div>
+                <div className="flex items-center gap-2 text-muted-foreground"><PackageCheck className="h-4 w-4" /> Available after save: <span className="font-medium text-foreground">{Math.max(0, (Number(receivedQuantity) || 0) - (Number(qaSampleQuantity) || 0))} {currentRow.unit}</span></div>
               </div>
             </div>
 
@@ -402,6 +441,9 @@ export function GoodsReceipt() {
                   <TableHead>Material Type</TableHead>
                   <TableHead>Material Name</TableHead>
                   <TableHead>Purchase Quantity</TableHead>
+                  <TableHead>Received Qty</TableHead>
+                  <TableHead>QA Sample Qty</TableHead>
+                  <TableHead>Available Qty</TableHead>
                   <TableHead>Unit</TableHead>
                   <TableHead>Purchase Date</TableHead>
                   <TableHead>Status</TableHead>
@@ -411,7 +453,7 @@ export function GoodsReceipt() {
               <TableBody>
                 {purchaseRows.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">No purchase records available.</TableCell>
+                    <TableCell colSpan={10} className="py-8 text-center text-muted-foreground">No purchase records available.</TableCell>
                   </TableRow>
                 )}
                 {purchaseRows.map(row => (
@@ -419,6 +461,9 @@ export function GoodsReceipt() {
                     <TableCell>{row.materialType}</TableCell>
                     <TableCell className="font-medium">{row.materialName}</TableCell>
                     <TableCell>{row.purchaseQuantity}</TableCell>
+                    <TableCell>{row.receivedQuantity}</TableCell>
+                    <TableCell>{row.qaSampleQuantity}</TableCell>
+                    <TableCell>{row.availableQuantity}</TableCell>
                     <TableCell>{row.unit}</TableCell>
                     <TableCell>{formatDate(row.purchaseDate)}</TableCell>
                     <TableCell>

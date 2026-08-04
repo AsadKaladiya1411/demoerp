@@ -90,7 +90,9 @@ const inventoryStatusTone: Record<string, 'default' | 'secondary' | 'outline' | 
 };
 
 const inventoryTypeTone: Record<InventoryTransactionType, 'default' | 'secondary' | 'outline'> = {
+  'Goods Inward': 'default',
   'Goods Receipt': 'default',
+  'QA Sample Consumption': 'outline',
   'Production Issue': 'outline',
   'Production Return': 'secondary',
   'Finished Goods Receipt': 'default',
@@ -129,6 +131,8 @@ function InventoryMovementView() {
         { label: 'Purchase Date', value: formatDate(record.purchaseDate) },
         { label: 'Received Date', value: formatDate(record.receivedDate) },
         { label: 'Received Quantity', value: `${record.receivedQuantity} ${record.unit}` },
+        { label: 'QA Sample Quantity', value: `${record.qaSampleQuantity ?? 0} ${record.unit}` },
+        { label: 'Available Quantity', value: `${record.availableQuantity ?? Math.max(0, record.receivedQuantity - (record.qaSampleQuantity ?? 0))} ${record.unit}` },
         { label: 'Pending Quantity', value: `${Math.max(0, record.purchaseQuantity - record.receivedQuantity)} ${record.unit}` },
         { label: 'Status', value: record.status },
         { label: 'Created By', value: record.receivedBy },
@@ -241,6 +245,9 @@ function InventoryMovementView() {
         { label: 'Product Name', value: transaction.productName || '-' },
         { label: 'Batch Number', value: transaction.batchNumber || '-' },
         { label: 'Transaction Type', value: transaction.transactionType },
+        { label: 'Received Quantity', value: transaction.transactionType === 'Goods Inward' ? `${transaction.quantity} ${transaction.unit}` : '-' },
+        { label: 'QA Sample Quantity', value: transaction.transactionType === 'QA Sample Consumption' ? `${transaction.quantity} ${transaction.unit}` : '-' },
+        { label: 'Available Quantity', value: `${runningBalance} ${transaction.unit}` },
         { label: 'Quantity', value: `${transaction.delta < 0 ? '-' : '+'}${transaction.quantity} ${transaction.unit}` },
         { label: 'Running Balance', value: `${runningBalance} ${transaction.unit}` },
         { label: 'Reference Module', value: transaction.referenceModule },
@@ -295,6 +302,8 @@ function InventoryMovementView() {
           { header: 'Material Name', render: row => row.materialName, className: 'font-medium' },
           { header: 'Purchase Ref', render: row => row.batchNumber || '-' },
           { header: 'Received Qty', render: row => `${row.quantity} ${row.unit}` },
+          { header: 'QA Sample Qty', render: row => `${(row.details.find(detail => detail.label === 'QA Sample Quantity')?.value as string | number | undefined) || '0'} ` },
+          { header: 'Available Qty', render: row => `${(row.details.find(detail => detail.label === 'Available Quantity')?.value as string | number | undefined) || '0'} ` },
           { header: 'Pending Qty', render: row => `${row.pendingQuantity ?? 0} ${row.unit}` },
           { header: 'Status', render: row => <Badge variant={inventoryStatusTone[row.status] || 'outline'}>{row.status}</Badge> },
           { header: 'Created By', render: row => row.createdBy },

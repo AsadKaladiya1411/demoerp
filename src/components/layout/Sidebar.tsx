@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { LayoutDashboard, Package, Tag, Factory, Settings, FileText, PackageOpen, ClipboardList, Inbox, ArrowRightLeft, CornerDownLeft, Shuffle, FlaskConical, Store } from 'lucide-react';
+import { LayoutDashboard, Package, Tag, Factory, Settings, FileText, PackageOpen, ClipboardList, Inbox, ArrowRightLeft, CornerDownLeft, Shuffle, FlaskConical, Store, BookOpen, History, CheckCircle, Microscope } from 'lucide-react';
 import { useAuth, type Permission } from '@/context/AuthContext';
 
 export function Sidebar() {
@@ -18,6 +18,16 @@ export function Sidebar() {
     
     { name: 'Reports', href: '/reports', icon: FileText, permission: 'reports' },
     { name: 'Master Report', href: '/master-report', icon: FileText, permission: 'masterReport' },
+  ];
+  const rndLinks: { name: string; href: string; icon: typeof LayoutDashboard; permission: Permission }[] = [
+    { name: 'Dashboard', href: '/rnd', icon: Microscope, permission: 'rnd' },
+    { name: 'Sample Inventory', href: '/rnd/sample-inventory', icon: PackageOpen, permission: 'rnd' },
+    { name: 'Base Formulation', href: '/rnd/base-formulation', icon: Settings, permission: 'rnd' },
+    { name: 'Trial Worksheet', href: '/rnd/trial-worksheet', icon: ClipboardList, permission: 'rnd' },
+    { name: 'Trial Assessment', href: '/rnd/trial-assessment', icon: CheckCircle, permission: 'rnd' },
+    { name: 'Trial History', href: '/rnd/trial-history', icon: History, permission: 'rnd' },
+    { name: 'Formula Library', href: '/rnd/formula-library', icon: BookOpen, permission: 'rnd' },
+    { name: 'R&D Reports', href: '/rnd/reports', icon: FileText, permission: 'rnd' },
   ];
   const employeeBLinks: { name: string; href: string; icon: typeof LayoutDashboard; permission: Permission }[] = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard, permission: 'dashboard' },
@@ -42,6 +52,28 @@ export function Sidebar() {
     { name: 'Pending Material Tests', href: '/employee-d/pending-material-tests', icon: FlaskConical, permission: 'employeeDPendingTests' },
   ];
   const links = currentUser.role === 'Employee B' ? employeeBLinks : currentUser.role === 'Employee C' ? employeeCLinks : currentUser.role === 'Employee D' ? employeeDLinks : defaultLinks;
+  const showRndSection = currentUser.role === 'Boss' || currentUser.role === 'Employee A';
+
+  const renderLinks = (items: { name: string; href: string; icon: typeof LayoutDashboard; permission: Permission }[]) => (
+    <div className="grid gap-1">
+      {items.filter(link => canAccess(link.permission)).map((link) => {
+        const Icon = link.icon;
+        return (
+          <Link
+            key={link.href}
+            to={link.href}
+            className={cn(
+              'flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary',
+              location.pathname === link.href ? 'bg-muted text-primary' : ''
+            )}
+          >
+            <Icon className="h-4 w-4" />
+            {link.name}
+          </Link>
+        );
+      })}
+    </div>
+  );
 
   return (
     <div className="flex h-screen w-64 flex-col border-r bg-card text-card-foreground">
@@ -49,23 +81,17 @@ export function Sidebar() {
         <span className="text-lg font-bold text-primary">Jolly ERP</span>
       </div>
       <div className="flex-1 overflow-auto py-4">
-        <nav className="grid gap-1 px-4 text-sm font-medium">
-          {links.filter(link => canAccess(link.permission)).map((link) => {
-            const Icon = link.icon;
-            return (
-              <Link
-                key={link.href}
-                to={link.href}
-                className={cn(
-                  'flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary',
-                  location.pathname === link.href ? 'bg-muted text-primary' : ''
-                )}
-              >
-                <Icon className="h-4 w-4" />
-                {link.name}
-              </Link>
-            );
-          })}
+        <nav className="space-y-4 px-4 text-sm font-medium">
+          <div className="space-y-1">
+            <div className="px-3 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Core</div>
+            {renderLinks(links)}
+          </div>
+          {showRndSection && (
+            <div className="space-y-1">
+              <div className="px-3 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Research & Development</div>
+              {renderLinks(rndLinks)}
+            </div>
+          )}
         </nav>
       </div>
     </div>

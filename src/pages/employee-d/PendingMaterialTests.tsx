@@ -76,7 +76,7 @@ export function PendingMaterialTests() {
                 <TableHead>Test Slip</TableHead>
                 <TableHead>Material Type</TableHead>
                 <TableHead>Material Name</TableHead>
-                <TableHead>Received Quantity</TableHead>
+                <TableHead>Available Quantity</TableHead>
                 <TableHead>Received Date</TableHead>
                 <TableHead>Received By</TableHead>
                 <TableHead>Status</TableHead>
@@ -94,7 +94,7 @@ export function PendingMaterialTests() {
                   <TableCell>{slip.id}</TableCell>
                   <TableCell>{slip.materialType}</TableCell>
                   <TableCell className="font-medium">{slip.materialName}</TableCell>
-                  <TableCell>{slip.receivedQuantity} {slip.unit}</TableCell>
+                  <TableCell>{slip.availableQuantity ?? slip.receivedQuantity} {slip.unit}</TableCell>
                   <TableCell>{formatDate(slip.receivedDate)}</TableCell>
                   <TableCell>{slip.receivedBy}</TableCell>
                   <TableCell><Badge variant="secondary">{slip.status}</Badge></TableCell>
@@ -123,8 +123,8 @@ export function PendingMaterialTests() {
                 <div className="font-medium">{selectedSlip.materialName}</div>
               </div>
               <div>
-                <div className="text-sm text-muted-foreground">Received Quantity</div>
-                <div className="font-medium">{selectedSlip.receivedQuantity} {selectedSlip.unit}</div>
+                <div className="text-sm text-muted-foreground">Available Quantity</div>
+                <div className="font-medium">{selectedSlip.availableQuantity ?? selectedSlip.receivedQuantity} {selectedSlip.unit}</div>
               </div>
               <div>
                 <div className="text-sm text-muted-foreground">Material Type</div>

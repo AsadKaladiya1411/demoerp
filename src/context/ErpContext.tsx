@@ -98,7 +98,7 @@ export type GoodsReceiptStatus = 'Pending' | 'Partially Received' | 'Completed';
 export type ProductionIssueMaterialType = 'Raw Materials' | 'Sachets' | 'Boxes' | 'Additional Materials';
 export type ProductionIssueStatus = 'Open' | 'Issued';
 export type ProductionReturnStatus = 'Open' | 'Partially Returned' | 'Returned';
-export type InventoryTransactionType = 'Goods Receipt' | 'Production Issue' | 'Production Return' | 'Finished Goods Receipt';
+export type InventoryTransactionType = 'Goods Inward' | 'Goods Receipt' | 'QA Sample Consumption' | 'Production Issue' | 'Production Return' | 'Finished Goods Receipt';
 export type InventoryTransactionStatus = 'Pending' | 'Partially Received' | 'Completed' | 'Issued' | 'Returned' | 'Recorded';
 export type InventoryTransactionMaterialType = GoodsReceiptMaterialType | 'Finished Goods';
 export interface EmployeeBRmPurchaseRecord {
@@ -176,6 +176,8 @@ export interface GoodsReceiptRecord {
   unit: string;
   purchaseDate: string;
   receivedQuantity: number;
+  qaSampleQuantity: number;
+  availableQuantity: number;
   receivedDate: string;
   receivedBy: string;
   remarks: string;
@@ -192,6 +194,8 @@ export interface MaterialTestSlip {
   materialId: string;
   materialName: string;
   receivedQuantity: number;
+  qaSampleQuantity: number;
+  availableQuantity: number;
   unit: string;
   receivedDate: string;
   receivedBy: string;
@@ -216,6 +220,7 @@ export interface SaveGoodsReceiptInput {
   unit: string;
   purchaseDate: string;
   receivedQuantity: number;
+  qaSampleQuantity: number;
   receivedDate: string;
   receivedBy: string;
   remarks: string;
@@ -382,6 +387,18 @@ interface ErpContextType {
 }
 
 const getInventoryTransactionId = (prefix: string, referenceId: string) => `${prefix}-${referenceId}-${Date.now()}`;
+
+const getCalculatedGoodsReceiptQuantities = (receivedQuantity: number, qaSampleQuantity: number) => {
+  const normalizedReceivedQuantity = Math.max(0, Number(receivedQuantity) || 0);
+  const normalizedQaSampleQuantity = Math.max(0, Number(qaSampleQuantity) || 0);
+  const availableQuantity = Math.max(0, normalizedReceivedQuantity - normalizedQaSampleQuantity);
+
+  return {
+    receivedQuantity: normalizedReceivedQuantity,
+    qaSampleQuantity: normalizedQaSampleQuantity,
+    availableQuantity,
+  };
+};
 
 const getGoodsReceiptStatus = (purchaseQuantity: number, receivedQuantity: number): GoodsReceiptStatus => {
   if (receivedQuantity <= 0) return 'Pending';
@@ -1026,51 +1043,75 @@ export const ErpProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const saveGoodsReceipt = (input: SaveGoodsReceiptInput) => {
     const key = getGoodsReceiptKey(input.sourceType, input.sourceId, input.lineType);
-    const referenceId = getInventoryTransactionId('grn', input.sourceId);
     const goodsReceiptId = `${input.sourceType}-${input.sourceId}-${Date.now()}`;
     const inventoryMaterialId = input.inventoryMaterialId || input.sourceId;
-    setGoodsReceiptRecords(prev => [
-      ...prev,
-      {
-        id: goodsReceiptId,
-        sourceType: input.sourceType,
-        sourceId: input.sourceId,
-        lineType: input.lineType,
-        materialType: input.materialType,
-        materialName: input.materialName,
-        inventoryMaterialId: input.inventoryMaterialId,
-        purchaseQuantity: input.purchaseQuantity,
-        unit: input.unit,
-        purchaseDate: input.purchaseDate,
-        receivedQuantity: input.receivedQuantity,
-        receivedDate: input.receivedDate,
-        receivedBy: input.receivedBy,
-        remarks: input.remarks,
-        status: getGoodsReceiptStatus(
-          input.purchaseQuantity,
-          prev
-            .filter(record => getGoodsReceiptKey(record.sourceType, record.sourceId, record.lineType) === key)
-            .reduce((sum, record) => sum + record.receivedQuantity, 0) + input.receivedQuantity,
-        ),
-      },
-    ]);
+    const quantities = getCalculatedGoodsReceiptQuantities(input.receivedQuantity, input.qaSampleQuantity);
+
+    setGoodsReceiptRecords(prev => {
+      const existingReceivedQuantity = prev
+        .filter(record => getGoodsReceiptKey(record.sourceType, record.sourceId, record.lineType) === key)
+        .reduce((sum, record) => sum + record.receivedQuantity, 0);
+      const totalReceivedQuantity = existingReceivedQuantity + quantities.receivedQuantity;
+
+      return [
+        ...prev,
+        {
+          id: goodsReceiptId,
+          sourceType: input.sourceType,
+          sourceId: input.sourceId,
+          lineType: input.lineType,
+          materialType: input.materialType,
+          materialName: input.materialName,
+          inventoryMaterialId: input.inventoryMaterialId,
+          purchaseQuantity: input.purchaseQuantity,
+          unit: input.unit,
+          purchaseDate: input.purchaseDate,
+          receivedQuantity: quantities.receivedQuantity,
+          qaSampleQuantity: quantities.qaSampleQuantity,
+          availableQuantity: quantities.availableQuantity,
+          receivedDate: input.receivedDate,
+          receivedBy: input.receivedBy,
+          remarks: input.remarks,
+          status: getGoodsReceiptStatus(input.purchaseQuantity, totalReceivedQuantity),
+        },
+      ];
+    });
+
+    const inwardTransactionId = getInventoryTransactionId('grn', input.sourceId);
+    const qaSampleTransactionId = getInventoryTransactionId('qa', input.sourceId);
 
     setInventoryTransactions(prev => [
       ...prev,
       {
-        id: referenceId,
+        id: inwardTransactionId,
         transactionDate: input.receivedDate,
         recordedAt: new Date().toISOString(),
         materialType: input.materialType,
         materialId: inventoryMaterialId,
         materialName: input.materialName,
-        transactionType: 'Goods Receipt',
-        quantity: input.receivedQuantity,
-        delta: input.receivedQuantity,
+        transactionType: 'Goods Inward',
+        quantity: quantities.receivedQuantity,
+        delta: quantities.receivedQuantity,
         unit: input.unit,
         referenceModule: 'Goods Receipt',
         createdBy: input.receivedBy,
-        status: input.receivedQuantity <= 0 ? 'Pending' : input.receivedQuantity < input.purchaseQuantity ? 'Partially Received' : 'Completed',
+        status: quantities.receivedQuantity <= 0 ? 'Pending' : 'Completed',
+        referenceId: input.sourceId,
+      },
+      {
+        id: qaSampleTransactionId,
+        transactionDate: input.receivedDate,
+        recordedAt: new Date().toISOString(),
+        materialType: input.materialType,
+        materialId: inventoryMaterialId,
+        materialName: input.materialName,
+        transactionType: 'QA Sample Consumption',
+        quantity: quantities.qaSampleQuantity,
+        delta: -quantities.qaSampleQuantity,
+        unit: input.unit,
+        referenceModule: 'Goods Receipt',
+        createdBy: input.receivedBy,
+        status: quantities.qaSampleQuantity <= 0 ? 'Pending' : 'Completed',
         referenceId: input.sourceId,
       },
     ]);
@@ -1086,7 +1127,9 @@ export const ErpProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         materialType: input.materialType,
         materialId: inventoryMaterialId,
         materialName: input.materialName,
-        receivedQuantity: input.receivedQuantity,
+        receivedQuantity: quantities.receivedQuantity,
+        qaSampleQuantity: quantities.qaSampleQuantity,
+        availableQuantity: quantities.availableQuantity,
         unit: input.unit,
         receivedDate: input.receivedDate,
         receivedBy: input.receivedBy,
@@ -1097,7 +1140,7 @@ export const ErpProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (input.inventoryMaterialId) {
       setMaterials(prev => prev.map(material => (
         material.id === input.inventoryMaterialId
-          ? { ...material, stock: (material.stock ?? 0) + input.receivedQuantity, lastUpdated: input.receivedDate, qaStatus: MATERIAL_QA_STATUS.UNDER_TESTING }
+          ? { ...material, stock: (material.stock ?? 0) + quantities.availableQuantity, lastUpdated: input.receivedDate, qaStatus: MATERIAL_QA_STATUS.UNDER_TESTING }
           : material
       )));
     }

@@ -23,6 +23,14 @@ import { ProductionIssue } from './pages/employee-c/ProductionIssue';
 import { ProductionReturn } from './pages/employee-c/ProductionReturn';
 import { PendingMaterialTests } from './pages/employee-d/PendingMaterialTests';
 import { VendorManagement } from './pages/masters/VendorManagement';
+import { RndDashboard } from './pages/rnd/RndDashboard';
+import { SampleInventory } from './pages/rnd/SampleInventory';
+import { BaseFormulation } from './pages/rnd/BaseFormulation';
+import { TrialWorksheet } from './pages/rnd/TrialWorksheet';
+import { TrialAssessment } from './pages/rnd/TrialAssessment';
+import { TrialHistory } from './pages/rnd/TrialHistory';
+import { FormulaLibrary } from './pages/rnd/FormulaLibrary';
+import { RndReports } from './pages/rnd/RndReports';
 
 function App() {
   return (
@@ -55,6 +63,14 @@ function App() {
           <Route path="inventory-movement" element={<RequirePermission permission="inventoryMovement"><Reports /></RequirePermission>} />
           <Route path="reports" element={<RequirePermission permission="reports"><Reports /></RequirePermission>} />
           <Route path="master-report" element={<RequirePermission permission="masterReport"><MasterReport /></RequirePermission>} />
+          <Route path="rnd" element={<RequirePermission permission="rnd"><RndDashboard /></RequirePermission>} />
+          <Route path="rnd/sample-inventory" element={<RequirePermission permission="rnd"><SampleInventory /></RequirePermission>} />
+          <Route path="rnd/base-formulation" element={<RequirePermission permission="rnd"><BaseFormulation /></RequirePermission>} />
+          <Route path="rnd/trial-worksheet" element={<RequirePermission permission="rnd"><TrialWorksheet /></RequirePermission>} />
+          <Route path="rnd/trial-assessment" element={<RequirePermission permission="rnd"><TrialAssessment /></RequirePermission>} />
+          <Route path="rnd/trial-history" element={<RequirePermission permission="rnd"><TrialHistory /></RequirePermission>} />
+          <Route path="rnd/formula-library" element={<RequirePermission permission="rnd"><FormulaLibrary /></RequirePermission>} />
+          <Route path="rnd/reports" element={<RequirePermission permission="rnd"><RndReports /></RequirePermission>} />
         </Route>
       </Routes>
     </BrowserRouter>
