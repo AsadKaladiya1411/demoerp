@@ -15,7 +15,6 @@ import { Reports } from './pages/Reports';
 import { MasterReport } from './pages/MasterReport';
 import { RequirePermission } from './components/auth/RequirePermission';
 import { RecipeManagement } from './pages/RecipeManagement';
-import { PendingSampleReceipts } from './pages/employee-a/PendingSampleReceipts';
 import { RmRequirement } from './pages/employee-b/RmRequirement';
 import { PmRequirement } from './pages/employee-b/PmRequirement';
 import { RndSampleRequirement } from './pages/employee-b/RndSampleRequirement';
@@ -51,7 +50,7 @@ function App() {
           <Route path="masters/materials" element={<RequirePermission permission="materials"><Materials /></RequirePermission>} />
           <Route path="masters/vendors" element={<RequirePermission permission="vendors"><VendorManagement /></RequirePermission>} />
           <Route path="recipes" element={<RequirePermission permission="recipes"><RecipeManagement /></RequirePermission>} />
-          <Route path="employee-a/sample-inventory" element={<RequirePermission permission="employeeASampleInventory"><PendingSampleReceipts /></RequirePermission>} />
+          
           <Route path="employee-b/rm-requirement" element={<RequirePermission permission="employeeBRm"><RmRequirement /></RequirePermission>} />
           <Route path="employee-b/pm-requirement" element={<RequirePermission permission="employeeBPm"><PmRequirement /></RequirePermission>} />
           <Route path="employee-b/rnd-sample-requirement" element={<RequirePermission permission="employeeBSampleRequirement"><RndSampleRequirement /></RequirePermission>} />

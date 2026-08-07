@@ -38,9 +38,7 @@ export function Sidebar() {
     { name: 'Reports', href: '/reports', icon: FileText, permission: 'reports' },
     { name: 'Master Report', href: '/employee-b/master-report', icon: FileText, permission: 'employeeBMasterReport' },
   ];
-  const employeeALinks: { name: string; href: string; icon: typeof LayoutDashboard; permission: Permission }[] = [
-    { name: 'Pending Sample Receipts', href: '/employee-a/sample-inventory', icon: PackageOpen, permission: 'employeeASampleInventory' },
-  ];
+  
   const employeeCLinks: { name: string; href: string; icon: typeof LayoutDashboard; permission: Permission }[] = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard, permission: 'dashboard' },
     { name: 'Vendor Management', href: '/masters/vendors', icon: Store, permission: 'vendors' },
@@ -90,12 +88,7 @@ export function Sidebar() {
             <div className="px-3 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Core</div>
             {renderLinks(links)}
           </div>
-          {currentUser.role === 'Employee A' && (
-            <div className="space-y-1">
-              <div className="px-3 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Sample Inventory</div>
-              {renderLinks(employeeALinks)}
-            </div>
-          )}
+          
           {showRndSection && (
             <div className="space-y-1">
               <div className="px-3 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Research & Development</div>

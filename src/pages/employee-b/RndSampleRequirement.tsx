@@ -76,39 +76,6 @@ type PurchaseForm = {
   remarks: string;
 };
 
-type ReceiptMode = 'receive' | 'view';
-
-type DispatchMode = 'send' | 'view';
-
-type ReceiptForm = {
-  requirementId: string;
-  requirementDate: string;
-  requestedBy: string;
-  materialName: string;
-  requiredQuantity: string;
-  unit: string;
-  purchaseDate: string;
-  poNumber: string;
-  supplier: string;
-  purchasedQuantity: string;
-  pricePerUnit: string;
-  expectedDeliveryDate: string;
-  purchaseRemarks: string;
-  receivedQuantity: string;
-  receivedDate: string;
-  invoiceNumber: string;
-  receiptRemarks: string;
-};
-
-type DispatchForm = {
-  requirementId: string;
-  poNumber: string;
-  materialName: string;
-  receivedQuantity: string;
-  dispatchDate: string;
-  dispatchedBy: string;
-  remarks: string;
-};
 
 const statusOrder: RequirementStatus[] = ['Pending', 'Purchased', 'Received', 'Sent to R&D'];
 
@@ -125,36 +92,6 @@ const createEmptyPurchaseForm = (): PurchaseForm => ({
   purchasedQuantity: '',
   pricePerUnit: '',
   expectedDeliveryDate: '',
-  remarks: '',
-});
-
-const createEmptyReceiptForm = (): ReceiptForm => ({
-  requirementId: '',
-  requirementDate: '',
-  requestedBy: '',
-  materialName: '',
-  requiredQuantity: '',
-  unit: '',
-  purchaseDate: '',
-  poNumber: '',
-  supplier: '',
-  purchasedQuantity: '',
-  pricePerUnit: '',
-  expectedDeliveryDate: '',
-  purchaseRemarks: '',
-  receivedQuantity: '',
-  receivedDate: '',
-  invoiceNumber: '',
-  receiptRemarks: '',
-});
-
-const createEmptyDispatchForm = (): DispatchForm => ({
-  requirementId: '',
-  poNumber: '',
-  materialName: '',
-  receivedQuantity: '',
-  dispatchDate: '',
-  dispatchedBy: '',
   remarks: '',
 });
 
@@ -199,14 +136,8 @@ export function RndSampleRequirement() {
   const [purchaseRecords, setPurchaseRecords] = useState<SamplePurchaseRecord[]>([]);
   const [purchaseMode, setPurchaseMode] = useState<PurchaseMode>('create');
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [receiptDialogOpen, setReceiptDialogOpen] = useState(false);
-  const [dispatchDialogOpen, setDispatchDialogOpen] = useState(false);
-  const [receiptMode, setReceiptMode] = useState<ReceiptMode>('receive');
-  const [dispatchMode, setDispatchMode] = useState<DispatchMode>('send');
   const [editingRequirementId, setEditingRequirementId] = useState('');
   const [form, setForm] = useState<PurchaseForm>(createEmptyPurchaseForm);
-  const [receiptForm, setReceiptForm] = useState<ReceiptForm>(createEmptyReceiptForm);
-  const [dispatchForm, setDispatchForm] = useState<DispatchForm>(createEmptyDispatchForm);
   const [message, setMessage] = useState('');
 
   const canEdit = currentUser.role === 'Employee B';
@@ -219,7 +150,7 @@ export function RndSampleRequirement() {
   const selectedRequirement = useMemo(() => rows.find(row => row.id === editingRequirementId) || null, [editingRequirementId, rows]);
   const selectedPurchase = useMemo(() => purchaseRecords.find(record => record.requirementId === editingRequirementId) || null, [editingRequirementId, purchaseRecords]);
   const purchaseTotalAmount = (Number(form.purchasedQuantity) || 0) * (Number(form.pricePerUnit) || 0);
-  const receiptTotalAmount = (Number(receiptForm.receivedQuantity) || 0) * (Number(receiptForm.pricePerUnit) || 0);
+  
 
   const openCreatePurchase = (row: SampleRequirementRow) => {
     setPurchaseMode('create');
@@ -243,67 +174,7 @@ export function RndSampleRequirement() {
     setDialogOpen(true);
   };
 
-  const openReceiveMaterial = (record: SamplePurchaseRecord) => {
-    setReceiptMode('receive');
-    setEditingRequirementId(record.requirementId);
-    setReceiptForm({
-      requirementId: record.requirementId,
-      requirementDate: record.requirementDate,
-      requestedBy: record.requestedBy,
-      materialName: record.materialName,
-      requiredQuantity: record.requiredQuantity.toFixed(2),
-      unit: record.unit,
-      purchaseDate: record.purchaseDate,
-      poNumber: record.poNumber,
-      supplier: record.supplier,
-      purchasedQuantity: record.purchasedQuantity,
-      pricePerUnit: record.pricePerUnit,
-      expectedDeliveryDate: record.expectedDeliveryDate,
-      purchaseRemarks: record.remarks,
-      receivedQuantity: record.purchasedQuantity,
-      receivedDate: todayString(),
-      invoiceNumber: '',
-      receiptRemarks: '',
-    });
-    setMessage('');
-    setReceiptDialogOpen(true);
-  };
-
-  const openSendToRnd = (record: SamplePurchaseRecord) => {
-    if (!record.receipt) return;
-
-    setDispatchMode('send');
-    setEditingRequirementId(record.requirementId);
-    setDispatchForm({
-      requirementId: record.requirementId,
-      poNumber: record.poNumber,
-      materialName: record.materialName,
-      receivedQuantity: record.receipt.receivedQuantity,
-      dispatchDate: todayString(),
-      dispatchedBy: currentUser.name,
-      remarks: '',
-    });
-    setMessage('');
-    setDispatchDialogOpen(true);
-  };
-
-  const openViewDispatch = (record: SamplePurchaseRecord) => {
-    if (!record.dispatch || !record.receipt) return;
-
-    setDispatchMode('view');
-    setEditingRequirementId(record.requirementId);
-    setDispatchForm({
-      requirementId: record.requirementId,
-      poNumber: record.poNumber,
-      materialName: record.materialName,
-      receivedQuantity: record.receipt.receivedQuantity,
-      dispatchDate: record.dispatch.dispatchDate,
-      dispatchedBy: record.dispatch.dispatchedBy,
-      remarks: record.dispatch.remarks,
-    });
-    setMessage('');
-    setDispatchDialogOpen(true);
-  };
+  
 
   const openViewPurchase = (row: SampleRequirementRow) => {
     const purchase = purchaseRecords.find(record => record.requirementId === row.id);
@@ -311,6 +182,28 @@ export function RndSampleRequirement() {
 
     setPurchaseMode('view');
     setEditingRequirementId(row.id);
+    setForm({
+      requirementId: purchase.requirementId,
+      requirementDate: purchase.requirementDate,
+      requestedBy: purchase.requestedBy,
+      materialName: purchase.materialName,
+      requiredQuantity: purchase.requiredQuantity.toFixed(2),
+      unit: purchase.unit,
+      purchaseDate: purchase.purchaseDate,
+      poNumber: purchase.poNumber,
+      supplier: purchase.supplier,
+      purchasedQuantity: purchase.purchasedQuantity,
+      pricePerUnit: purchase.pricePerUnit,
+      expectedDeliveryDate: purchase.expectedDeliveryDate,
+      remarks: purchase.remarks,
+    });
+    setMessage('');
+    setDialogOpen(true);
+  };
+
+  const openViewPurchaseFromRecord = (purchase: SamplePurchaseRecord) => {
+    setPurchaseMode('view');
+    setEditingRequirementId(purchase.requirementId);
     setForm({
       requirementId: purchase.requirementId,
       requirementDate: purchase.requirementDate,
@@ -339,15 +232,7 @@ export function RndSampleRequirement() {
     setMessage('');
   };
 
-  const closeReceiptDialog = () => {
-    setReceiptDialogOpen(false);
-    setMessage('');
-  };
-
-  const closeDispatchDialog = () => {
-    setDispatchDialogOpen(false);
-    setMessage('');
-  };
+  
 
   const savePurchase = () => {
     const currentRequirement = rows.find(row => row.id === editingRequirementId) || null;
@@ -408,90 +293,9 @@ export function RndSampleRequirement() {
     });
   };
 
-  const saveReceipt = () => {
-    const currentPurchase = purchaseRecords.find(record => record.requirementId === editingRequirementId) || null;
-    if (!currentPurchase) {
-      setMessage('Purchase record not found.');
-      return;
-    }
-    if (!receiptForm.receivedDate) {
-      setMessage('Received Date is required.');
-      return;
-    }
+  
 
-    const receivedQuantity = Number(receiptForm.receivedQuantity || 0);
-    const purchasedQuantity = Number(currentPurchase.purchasedQuantity || 0);
-
-    if (receivedQuantity <= 0) {
-      setMessage('Received Quantity must be greater than 0.');
-      return;
-    }
-    if (receivedQuantity > purchasedQuantity) {
-      setMessage('Received Quantity cannot exceed Purchased Quantity.');
-      return;
-    }
-
-    const receiptPayload = {
-      receivedQuantity: receiptForm.receivedQuantity,
-      receivedDate: receiptForm.receivedDate,
-      invoiceNumber: receiptForm.invoiceNumber,
-      remarks: receiptForm.receiptRemarks,
-    };
-
-    setPurchaseRecords(previous => previous.map(record => (
-      record.requirementId === currentPurchase.requirementId
-        ? { ...record, status: 'Received', receipt: receiptPayload }
-        : record
-    )));
-    updateRndSampleRequirementStatus(currentPurchase.requirementId, 'Received');
-    setReceiptMode('view');
-    setReceiptForm(previous => ({
-      ...previous,
-      receivedQuantity: receiptForm.receivedQuantity,
-      receivedDate: receiptForm.receivedDate,
-      invoiceNumber: receiptForm.invoiceNumber,
-      receiptRemarks: receiptForm.receiptRemarks,
-    }));
-    setMessage('Receipt saved.');
-  };
-
-  const confirmDispatch = () => {
-    const currentPurchase = purchaseRecords.find(record => record.requirementId === editingRequirementId) || null;
-    if (!currentPurchase) {
-      setMessage('Purchase record not found.');
-      return;
-    }
-    if (currentPurchase.status !== 'Received') {
-      setMessage('Only received purchases can be sent to R&D.');
-      return;
-    }
-
-    const dispatchPayload = {
-      dispatchDate: dispatchForm.dispatchDate,
-      dispatchedBy: dispatchForm.dispatchedBy,
-      remarks: dispatchForm.remarks,
-    };
-
-    setPurchaseRecords(previous => previous.map(record => (
-      record.requirementId === currentPurchase.requirementId
-        ? { ...record, status: 'Sent to R&D', dispatch: dispatchPayload }
-        : record
-    )));
-    updateRndSampleRequirementStatus(currentPurchase.requirementId, 'Sent to R&D');
-    recordSampleDispatch({
-      dispatchDate: dispatchForm.dispatchDate,
-      poNumber: dispatchForm.poNumber,
-      requirementId: dispatchForm.requirementId,
-      materialName: dispatchForm.materialName,
-      quantity: Number(dispatchForm.receivedQuantity || 0),
-      unit: currentPurchase.unit,
-      dispatchedBy: dispatchForm.dispatchedBy,
-      dispatchRemarks: dispatchForm.remarks,
-    });
-    setDispatchMode('view');
-    setDispatchForm(previous => ({ ...previous, ...dispatchPayload }));
-    setMessage('Material sent to R&D.');
-  };
+  
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
@@ -641,169 +445,9 @@ export function RndSampleRequirement() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={receiptDialogOpen} onOpenChange={open => (open ? setReceiptDialogOpen(true) : closeReceiptDialog())}>
-        <DialogContent className="max-w-5xl">
-          <DialogHeader>
-            <DialogTitle>{receiptMode === 'receive' ? 'Receive Material' : 'View Receipt'}</DialogTitle>
-            <DialogDescription>Vendor receipt details are tracked locally for the R&D sample purchase workflow.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              <div className="space-y-2">
-                <Label>Requirement ID</Label>
-                <Input readOnly value={receiptForm.requirementId} />
-              </div>
-              <div className="space-y-2">
-                <Label>Material Name</Label>
-                <Input readOnly value={receiptForm.materialName} />
-              </div>
-              <div className="space-y-2">
-                <Label>Required Quantity</Label>
-                <Input readOnly value={receiptForm.requiredQuantity} />
-              </div>
-              <div className="space-y-2">
-                <Label>Unit</Label>
-                <Input readOnly value={receiptForm.unit} />
-              </div>
-              <div className="space-y-2">
-                <Label>Purchase Date</Label>
-                <Input readOnly value={receiptForm.purchaseDate} />
-              </div>
-              <div className="space-y-2">
-                <Label>PO Number</Label>
-                <Input readOnly value={receiptForm.poNumber} />
-              </div>
-              <div className="space-y-2">
-                <Label>Supplier</Label>
-                <Input readOnly value={receiptForm.supplier} />
-              </div>
-              <div className="space-y-2">
-                <Label>Purchased Quantity</Label>
-                <Input readOnly value={receiptForm.purchasedQuantity} />
-              </div>
-              <div className="space-y-2">
-                <Label>Price Per Unit</Label>
-                <Input readOnly value={receiptForm.pricePerUnit} />
-              </div>
-              <div className="space-y-2">
-                <Label>Expected Delivery Date</Label>
-                <Input readOnly value={receiptForm.expectedDeliveryDate || '-'} />
-              </div>
-              <div className="space-y-2">
-                <Label>Total Amount</Label>
-                <Input readOnly value={formatMoney(receiptTotalAmount)} />
-              </div>
-              <div className="space-y-2 md:col-span-2 xl:col-span-3">
-                <Label>Purchase Remarks</Label>
-                <Input readOnly value={receiptForm.purchaseRemarks || '-'} />
-              </div>
-            </div>
+      
 
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 border-t pt-4">
-              <div className="space-y-2">
-                <Label>Received Quantity</Label>
-                <Input
-                  type="number"
-                  step="any"
-                  inputMode="decimal"
-                  value={receiptForm.receivedQuantity}
-                  onChange={event => setReceiptForm(previous => ({ ...previous, receivedQuantity: event.target.value }))}
-                  onWheel={preventNumberWheel}
-                  disabled={receiptMode === 'view'}
-                  className={manualNumberInputClassName}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Received Date</Label>
-                <Input
-                  type="date"
-                  value={receiptForm.receivedDate}
-                  onChange={event => setReceiptForm(previous => ({ ...previous, receivedDate: event.target.value }))}
-                  disabled={receiptMode === 'view'}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Invoice Number</Label>
-                <Input
-                  value={receiptForm.invoiceNumber}
-                  onChange={event => setReceiptForm(previous => ({ ...previous, invoiceNumber: event.target.value }))}
-                  disabled={receiptMode === 'view'}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Total Amount</Label>
-                <Input readOnly value={formatMoney(receiptTotalAmount)} />
-              </div>
-              <div className="space-y-2 md:col-span-2 xl:col-span-4">
-                <Label>Remarks</Label>
-                <Input
-                  value={receiptForm.receiptRemarks}
-                  onChange={event => setReceiptForm(previous => ({ ...previous, receiptRemarks: event.target.value }))}
-                  disabled={receiptMode === 'view'}
-                />
-              </div>
-            </div>
-          </div>
-          {message && <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">{message}</div>}
-          <DialogFooter>
-            <Button variant="outline" onClick={closeReceiptDialog}>Close</Button>
-            {receiptMode === 'receive' && <Button onClick={saveReceipt}>Save Receipt</Button>}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={dispatchDialogOpen} onOpenChange={open => (open ? setDispatchDialogOpen(true) : closeDispatchDialog())}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{dispatchMode === 'send' ? 'Send to R&D' : 'View Dispatch'}</DialogTitle>
-            <DialogDescription>
-              {dispatchMode === 'send'
-                ? 'Confirm dispatch of this received sample material to R&D.'
-                : 'Dispatch details saved for this R&D sample material.'}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label>PO Number</Label>
-              <Input readOnly value={dispatchForm.poNumber} />
-            </div>
-            <div className="space-y-2">
-              <Label>Requirement ID</Label>
-              <Input readOnly value={dispatchForm.requirementId} />
-            </div>
-            <div className="space-y-2">
-              <Label>Material Name</Label>
-              <Input readOnly value={dispatchForm.materialName} />
-            </div>
-            <div className="space-y-2">
-              <Label>Received Quantity</Label>
-              <Input readOnly value={dispatchForm.receivedQuantity} />
-            </div>
-            <div className="space-y-2">
-              <Label>Dispatch Date</Label>
-              <Input readOnly value={dispatchForm.dispatchDate} />
-            </div>
-            <div className="space-y-2">
-              <Label>Dispatched By</Label>
-              <Input readOnly value={dispatchForm.dispatchedBy} />
-            </div>
-            <div className="space-y-2 md:col-span-2">
-              <Label>Remarks</Label>
-              <Input
-                value={dispatchForm.remarks}
-                onChange={event => setDispatchForm(previous => ({ ...previous, remarks: event.target.value }))}
-                disabled={dispatchMode === 'view'}
-                placeholder="Optional remarks"
-              />
-            </div>
-          </div>
-          {message && <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">{message}</div>}
-          <DialogFooter>
-            <Button variant="outline" onClick={closeDispatchDialog}>Close</Button>
-            {dispatchMode === 'send' && <Button onClick={confirmDispatch}>Confirm Send to R&D</Button>}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      
 
       <Card>
         <CardHeader>
@@ -843,19 +487,9 @@ export function RndSampleRequirement() {
                   <TableCell>{record.poNumber}</TableCell>
                   <TableCell>{record.purchaseDate}</TableCell>
                   <TableCell>
-                    {record.status === 'Purchased' ? (
-                      <Button variant="outline" size="sm" onClick={() => openReceiveMaterial(record)} disabled={!canEdit}>
-                        Receive Material
-                      </Button>
-                    ) : record.status === 'Received' ? (
-                      <Button variant="outline" size="sm" onClick={() => openSendToRnd(record)} disabled={!canEdit || !record.receipt}>
-                        Send to R&D
-                      </Button>
-                    ) : (
-                      <Button variant="outline" size="sm" onClick={() => openViewDispatch(record)} disabled={!record.dispatch || !record.receipt}>
-                        View Dispatch
-                      </Button>
-                    )}
+                    <Button variant="outline" size="sm" onClick={() => openViewPurchaseFromRecord(record)} disabled={!(canView || canEdit)}>
+                      View Purchase
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))}

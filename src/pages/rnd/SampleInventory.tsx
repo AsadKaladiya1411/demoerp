@@ -255,68 +255,7 @@ export function SampleInventory() {
         </CardContent>
       </Card>
 
-      <Dialog open={receiveOpen} onOpenChange={setReceiveOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Receive Sample</DialogTitle>
-            <DialogDescription>Create a new raw-material sample record.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Raw Material</label>
-              <Select value={selectedMaterialId} onValueChange={setSelectedMaterialId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select raw material" />
-                </SelectTrigger>
-                <SelectContent>
-                  {rawMaterials.map(material => (
-                    <SelectItem key={material.id} value={material.id}>
-                      {material.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Manufacturer</label>
-                <Input value={selectedMaterial?.supplier ?? ''} disabled />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Batch Number</label>
-                <Input value={receiveBatchNumber} onChange={event => setReceiveBatchNumber(event.target.value)} placeholder="Auto or manual batch number" />
-              </div>
-            </div>
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Received Date</label>
-                <Input type="date" value={receiveDate} onChange={event => setReceiveDate(event.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Received Quantity</label>
-                <Input type="number" min="0" value={receivedQuantity} onChange={event => setReceivedQuantity(event.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Unit</label>
-                <Input value={selectedMaterial?.unit ?? ''} disabled />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Remarks</label>
-              <textarea
-                className="flex min-h-[88px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                value={receiveRemarks}
-                onChange={event => setReceiveRemarks(event.target.value)}
-                placeholder="Optional remarks"
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setReceiveOpen(false)}>Cancel</Button>
-              <Button onClick={saveReceive}>Save</Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      
 
       <Dialog open={reqDialogOpen} onOpenChange={setReqDialogOpen}>
         <DialogContent>
