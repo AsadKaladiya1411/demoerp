@@ -13,7 +13,6 @@ import {
   adjustSampleQuantity,
   getSampleInventoryRecords,
   issueSample,
-  receiveSample,
   seedSampleInventoryRecords,
   type SampleInventoryRecord,
 } from './rndStore';
@@ -30,16 +29,10 @@ export function SampleInventory() {
   const { materials } = useErpData();
   const rawMaterials = useMemo(() => materials.filter(material => material.type === 'Raw Material'), [materials]);
   const [inventory, setInventory] = useState<SampleInventoryRecord[]>(() => seedSampleInventoryRecords(materials));
-  const [receiveOpen, setReceiveOpen] = useState(false);
   const [issueOpen, setIssueOpen] = useState(false);
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [activeRecord, setActiveRecord] = useState<SampleInventoryRecord | null>(null);
-  const [selectedMaterialId, setSelectedMaterialId] = useState(rawMaterials[0]?.id ?? '');
-  const [receiveDate, setReceiveDate] = useState(today());
-  const [receivedQuantity, setReceivedQuantity] = useState('');
-  const [receiveBatchNumber, setReceiveBatchNumber] = useState('');
-  const [receiveRemarks, setReceiveRemarks] = useState('');
   const [issueDate, setIssueDate] = useState(today());
   const [issueQuantity, setIssueQuantity] = useState('');
   const [issueRemarks, setIssueRemarks] = useState('');
@@ -49,35 +42,24 @@ export function SampleInventory() {
   const [adjustRemarks, setAdjustRemarks] = useState('');
   const [message, setMessage] = useState('');
   const [reqDialogOpen, setReqDialogOpen] = useState(false);
-  const [reqMaterialId, setReqMaterialId] = useState(rawMaterials[0]?.id ?? '');
+  const [reqMaterialName, setReqMaterialName] = useState('');
   const [reqQuantity, setReqQuantity] = useState('');
   const [reqPurpose, setReqPurpose] = useState<'Trial' | 'Base Formula' | 'Testing'>('Trial');
   const [reqPriority, setReqPriority] = useState<'Low' | 'Medium' | 'High'>('Medium');
   const [reqRequiredDate, setReqRequiredDate] = useState(today());
   const [reqRemarks, setReqRemarks] = useState('');
+  const [reqUnit, setReqUnit] = useState('');
 
   const canMutate = currentUser.role === 'Employee A';
 
-  const selectedMaterial = rawMaterials.find(material => material.id === selectedMaterialId) ?? rawMaterials[0] ?? null;
   const historyRecord = activeRecord;
 
   const refreshInventory = () => setInventory(getSampleInventoryRecords());
 
-  const resetReceiveForm = () => {
-    setSelectedMaterialId(rawMaterials[0]?.id ?? '');
-    setReceiveDate(today());
-    setReceivedQuantity('');
-    setReceiveBatchNumber('');
-    setReceiveRemarks('');
-  };
-
-  const openReceive = () => {
-    setMessage('');
-    setReceiveOpen(true);
-  };
 
   const openRequestDialog = () => {
-    setReqMaterialId(rawMaterials[0]?.id ?? '');
+    setReqMaterialName('');
+    setReqUnit('');
     setReqQuantity('');
     setReqPurpose('Trial');
     setReqPriority('Medium');
@@ -109,38 +91,10 @@ export function SampleInventory() {
     setActiveRecord(record);
     setHistoryOpen(true);
   };
-
-  const saveReceive = () => {
-    if (!selectedMaterial) {
-      setMessage('Select a raw material first.');
-      return;
-    }
-    const quantity = Number(receivedQuantity);
-    if (!Number.isFinite(quantity) || quantity <= 0) {
-      setMessage('Enter a valid received quantity.');
-      return;
-    }
-
-    receiveSample({
-      rawMaterialId: selectedMaterial.id,
-      rawMaterialName: selectedMaterial.name,
-      manufacturer: selectedMaterial.supplier,
-      batchNumber: receiveBatchNumber.trim() || `${selectedMaterial.code}-${Date.now().toString().slice(-4)}`,
-      receivedDate: receiveDate,
-      receivedQuantity: quantity,
-      unit: selectedMaterial.unit,
-      remarks: receiveRemarks,
-    });
-    refreshInventory();
-    setReceiveOpen(false);
-    resetReceiveForm();
-    setMessage('Sample created.');
-  };
-
   const saveRequest = () => {
-    const material = rawMaterials.find(m => m.id === reqMaterialId) || null;
-    if (!material) {
-      setMessage('Select a material.');
+    const materialName = reqMaterialName.trim();
+    if (!materialName) {
+      setMessage('Enter a material name.');
       return;
     }
     const qty = Number(reqQuantity || 0);
@@ -151,9 +105,9 @@ export function SampleInventory() {
 
     createRndSampleRequirement({
       requestedBy: currentUser.name,
-      materialName: material.name,
+      materialName,
       quantity: qty,
-      unit: material.unit,
+      unit: reqUnit || '',
       purpose: reqPurpose,
       priority: reqPriority,
       requiredDate: reqRequiredDate,
@@ -233,10 +187,6 @@ export function SampleInventory() {
           </div>
           {canMutate && (
             <div className="flex gap-2">
-              <Button onClick={openReceive} className="w-fit">
-                <Plus className="mr-2 h-4 w-4" />
-                Receive Sample
-              </Button>
               <Button variant="outline" onClick={openRequestDialog} className="w-fit">
                 Request Sample
               </Button>
@@ -376,17 +326,8 @@ export function SampleInventory() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium">Raw Material</label>
-              <Select value={reqMaterialId} onValueChange={setReqMaterialId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select raw material" />
-                </SelectTrigger>
-                <SelectContent>
-                  {rawMaterials.map(material => (
-                    <SelectItem key={material.id} value={material.id}>{material.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <label className="text-sm font-medium">Material (manual)</label>
+              <Input value={reqMaterialName} onChange={e => setReqMaterialName(e.target.value)} placeholder="Enter material name" />
             </div>
             <div className="grid gap-4 md:grid-cols-3">
               <div className="space-y-2">
@@ -395,7 +336,7 @@ export function SampleInventory() {
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Unit</label>
-                <Input readOnly value={rawMaterials.find(m => m.id === reqMaterialId)?.unit || ''} />
+                <Input value={reqUnit} onChange={e => setReqUnit(e.target.value)} placeholder="e.g. KG, Nos" />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Purpose</label>
