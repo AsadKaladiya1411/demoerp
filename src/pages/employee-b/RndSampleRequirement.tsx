@@ -293,6 +293,43 @@ export function RndSampleRequirement() {
     });
   };
 
+  const receiveAndSendToRnd = (purchase: SamplePurchaseRecord) => {
+    // mark received locally and immediately create a dispatch for Employee A to receive
+    const receiptPayload = {
+      receivedQuantity: purchase.purchasedQuantity,
+      receivedDate: todayString(),
+      invoiceNumber: '',
+      remarks: 'Auto-received and dispatched to R&D',
+    };
+
+    const dispatchPayload = {
+      dispatchDate: todayString(),
+      dispatchedBy: currentUser.name,
+      remarks: 'Auto-dispatch after receive',
+    };
+
+    setPurchaseRecords(previous => previous.map(record => (
+      record.requirementId === purchase.requirementId
+        ? { ...record, status: 'Sent to R&D', receipt: receiptPayload, dispatch: dispatchPayload }
+        : record
+    )));
+
+    updateRndSampleRequirementStatus(purchase.requirementId, 'Sent to R&D');
+
+    recordSampleDispatch({
+      dispatchDate: todayString(),
+      poNumber: purchase.poNumber,
+      requirementId: purchase.requirementId,
+      materialName: purchase.materialName,
+      quantity: Number(purchase.purchasedQuantity || 0),
+      unit: purchase.unit,
+      dispatchedBy: currentUser.name,
+      dispatchRemarks: 'Auto-dispatch from Employee B after receive',
+    });
+
+    setMessage('Material marked received and dispatched to R&D.');
+  };
+
   
 
   
@@ -487,9 +524,15 @@ export function RndSampleRequirement() {
                   <TableCell>{record.poNumber}</TableCell>
                   <TableCell>{record.purchaseDate}</TableCell>
                   <TableCell>
-                    <Button variant="outline" size="sm" onClick={() => openViewPurchaseFromRecord(record)} disabled={!(canView || canEdit)}>
-                      View Purchase
-                    </Button>
+                    {record.status === 'Purchased' ? (
+                      <Button variant="outline" size="sm" onClick={() => receiveAndSendToRnd(record)} disabled={!canEdit}>
+                        Receive & Send to R&D
+                      </Button>
+                    ) : (
+                      <Button variant="outline" size="sm" onClick={() => openViewPurchaseFromRecord(record)} disabled={!(canView || canEdit)}>
+                        View Purchase
+                      </Button>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}

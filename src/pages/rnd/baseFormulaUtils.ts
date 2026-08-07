@@ -1,6 +1,6 @@
 export type BaseFormulaIngredientDraft = {
   id: string;
-  materialId: string;
+  materialName: string;
   quantityPer100g: string;
   proteinPercent: string;
   proteinContribution: string;
@@ -23,7 +23,7 @@ export const todayString = () => new Date().toISOString().slice(0, 10);
 
 export const createIngredientDraft = (id: string): BaseFormulaIngredientDraft => ({
   id,
-  materialId: '',
+  materialName: '',
   quantityPer100g: '',
   proteinPercent: '',
   proteinContribution: '',

@@ -88,7 +88,7 @@ export function BaseFormulation() {
   const validateAndSave = () => {
     const batch = Number(batchSize || 0);
     const serving = Number(servingSize || 0);
-    const validIngredients = ingredients.filter(ingredient => ingredient.materialId);
+    const validIngredients = ingredients.filter(ingredient => (ingredient.materialName || '').trim());
 
     if (!selectedProduct) {
       setMessage('Product required.');
@@ -152,16 +152,16 @@ export function BaseFormulation() {
       totalProtein: savedRecord.totalProtein,
       ingredientCount: savedRecord.ingredientCount,
       ingredients: validIngredients.map(ingredient => {
-        const material = rawMaterials.find(item => item.id === ingredient.materialId);
         const quantityPer100g = Number(ingredient.quantityPer100g || 0);
         const proteinPercent = Number(ingredient.proteinPercent || 0);
         const proteinContribution = (proteinPercent * quantityPer100g) / 100;
         return {
           ...ingredient,
           proteinContribution: proteinContribution.toFixed(2),
-          rawMaterialName: material?.name || '',
-          manufacturer: material?.supplier || '',
-          uom: material?.unit || '',
+          materialId: '',
+          rawMaterialName: ingredient.materialName || '',
+          manufacturer: '',
+          uom: '',
         };
       }),
     });
@@ -321,7 +321,7 @@ export function BaseFormulation() {
               </TableHeader>
               <TableBody>
                 {ingredients.map((ingredient) => {
-                  const material = rawMaterials.find(item => item.id === ingredient.materialId) ?? null;
+                  
                   const quantityPer100g = Number(ingredient.quantityPer100g || 0);
                   const quantityPerServing = quantityPer100g * (servingSizeValue / 100);
                   const quantityPerBatch = quantityPer100g * (batchSizeValue / 100);
@@ -333,22 +333,11 @@ export function BaseFormulation() {
 
                   return (
                     <TableRow key={ingredient.id}>
-                      <TableCell className="min-w-56">
-                        <Select value={ingredient.materialId} onValueChange={value => updateIngredient(ingredient.id, 'materialId', value)} disabled={!canMutate}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select raw material" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {rawMaterials.map(materialItem => (
-                              <SelectItem key={materialItem.id} value={materialItem.id}>
-                                {materialItem.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                      <TableCell>{material?.supplier || '-'}</TableCell>
-                      <TableCell>{material?.unit || '-'}</TableCell>
+                          <TableCell className="min-w-56">
+                            <Input value={ingredient.materialName} onChange={event => updateIngredient(ingredient.id, 'materialName', event.target.value)} disabled={!canMutate} placeholder="Enter material name" />
+                          </TableCell>
+                          <TableCell>-</TableCell>
+                          <TableCell>-</TableCell>
                       <TableCell className="text-right">
                         <Input
                           type="number"
