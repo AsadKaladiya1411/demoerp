@@ -13,8 +13,10 @@ export type Permission =
   | 'reports'
   | 'masterReport'
   | 'rnd'
+  | 'employeeASampleInventory'
   | 'employeeBRm'
   | 'employeeBPm'
+  | 'employeeBSampleRequirement'
   | 'employeeBMasterReport'
   | 'employeeCGrn'
   | 'employeeCIssue'
@@ -45,9 +47,9 @@ const users: AppUser[] = [
 ];
 
 const rolePermissions: Record<Role, Permission[]> = {
-  Boss: ['dashboard', 'categories', 'products', 'recipes', 'assortedConfiguration', 'manufacturers', 'materials', 'vendors', 'reports', 'masterReport', 'rnd', 'employeeBRm', 'employeeBPm', 'employeeBMasterReport', 'employeeCGrn', 'employeeCIssue', 'employeeCReturn', 'inventoryMovement', 'employeeDPendingTests'],
-  'Employee A': ['dashboard', 'categories', 'products', 'recipes', 'assortedConfiguration', 'reports', 'masterReport', 'rnd'],
-  'Employee B': ['dashboard', 'vendors', 'employeeBRm', 'employeeBPm', 'reports', 'employeeBMasterReport'],
+  Boss: ['dashboard', 'categories', 'products', 'recipes', 'assortedConfiguration', 'manufacturers', 'materials', 'vendors', 'reports', 'masterReport', 'rnd', 'employeeASampleInventory', 'employeeBRm', 'employeeBPm', 'employeeBSampleRequirement', 'employeeBMasterReport', 'employeeCGrn', 'employeeCIssue', 'employeeCReturn', 'inventoryMovement', 'employeeDPendingTests'],
+  'Employee A': ['dashboard', 'categories', 'products', 'recipes', 'assortedConfiguration', 'reports', 'masterReport', 'rnd', 'employeeASampleInventory'],
+  'Employee B': ['dashboard', 'vendors', 'employeeBRm', 'employeeBPm', 'employeeBSampleRequirement', 'reports', 'employeeBMasterReport'],
   'Employee C': ['dashboard', 'vendors', 'materials', 'masterReport', 'employeeCGrn', 'employeeCIssue', 'employeeCReturn', 'inventoryMovement'],
   'Employee D': ['dashboard', 'vendors', 'employeeDPendingTests'],
 };

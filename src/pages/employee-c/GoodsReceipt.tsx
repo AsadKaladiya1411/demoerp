@@ -57,7 +57,7 @@ const parseRouteLineType = (value?: string): 'flavoured' | 'assorted' | undefine
 export function GoodsReceipt() {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
-  const { rmPurchaseRecords, sachetPurchaseRecords, boxPurchaseRecords, goodsReceiptRecords, saveGoodsReceipt } = useErpData();
+  const { materials, rmPurchaseRecords, sachetPurchaseRecords, boxPurchaseRecords, goodsReceiptRecords, saveGoodsReceipt } = useErpData();
   const params = useParams<{ materialType?: string; sourceId?: string; lineType?: string }>();
   const routeMaterialType = parseRouteMaterialType(params.materialType);
   const routeLineType = parseRouteLineType(params.lineType);
@@ -72,6 +72,17 @@ export function GoodsReceipt() {
 
   const purchaseRows = useMemo<GoodsReceiptRow[]>(() => {
     const rows: GoodsReceiptRow[] = [];
+    const resolvePackagingMaterialId = (name: string, keywords: string[]) => {
+      const normalizedName = name.toLowerCase();
+      return materials.find(material => {
+        const materialName = material.name.toLowerCase();
+        return material.type === 'Packaging Material' && (
+          normalizedName.includes(materialName) ||
+          materialName.includes(normalizedName) ||
+          keywords.some(keyword => materialName.includes(keyword))
+        );
+      })?.id;
+    };
 
     rmPurchaseRecords.forEach(record => {
       const purchaseQuantity = Number(record.purchasedQuantity) || record.requiredQuantity || 0;
@@ -95,14 +106,13 @@ export function GoodsReceipt() {
 
     sachetPurchaseRecords.forEach(record => {
       const purchaseQuantity = Number(record.purchasedQuantity) || record.requiredQuantity || 0;
-      const inventoryMaterialId = record.purchaseUnit === 'Roll' ? 'mat-6' : 'mat-7';
       rows.push({
         routeMaterialType: 'sachets',
         sourceType: 'Sachets',
         sourceId: record.id,
         materialType: 'Sachets',
         materialName: `${record.productName}${record.purchaseUnit === 'Roll' ? ' - Sachet Rolls' : ' - Empty Sachets'}`,
-        inventoryMaterialId,
+        inventoryMaterialId: record.materialId || resolvePackagingMaterialId(record.productName, record.purchaseUnit === 'Roll' ? ['sachet', 'roll', 'film', 'pouch'] : ['sachet', 'empty', 'pouch']),
         purchaseQuantity,
         unit: record.purchaseUnit,
         purchaseDate: record.purchaseDate || formatDate(record.expectedDeliveryDateTime),
@@ -127,7 +137,7 @@ export function GoodsReceipt() {
           routeLineType: 'flavoured',
           materialType: 'Boxes',
           materialName: `${record.productName} - Flavoured Boxes`,
-          inventoryMaterialId: 'mat-8',
+          inventoryMaterialId: record.flavouredMaterialId || resolvePackagingMaterialId(record.productName, ['flavoured', 'box']),
           purchaseQuantity: flavouredQuantity,
           unit: 'Nos',
           purchaseDate: record.purchaseDate || formatDate(record.expectedDeliveryDateTime),
@@ -148,7 +158,7 @@ export function GoodsReceipt() {
           routeLineType: 'assorted',
           materialType: 'Boxes',
           materialName: `${record.productName} - Assorted Boxes`,
-          inventoryMaterialId: 'mat-8',
+          inventoryMaterialId: record.assortedMaterialId || resolvePackagingMaterialId(record.productName, ['assorted', 'box']),
           purchaseQuantity: assortedQuantity,
           unit: 'Nos',
           purchaseDate: record.purchaseDate || formatDate(record.expectedDeliveryDateTime),
@@ -188,7 +198,7 @@ export function GoodsReceipt() {
         if (left.materialType !== right.materialType) return left.materialType.localeCompare(right.materialType);
         return left.materialName.localeCompare(right.materialName);
       });
-  }, [boxPurchaseRecords, goodsReceiptRecords, rmPurchaseRecords, sachetPurchaseRecords]);
+  }, [boxPurchaseRecords, goodsReceiptRecords, materials, rmPurchaseRecords, sachetPurchaseRecords]);
 
   const summaryCounts = useMemo(() => ({
     total: purchaseRows.length,

@@ -13,11 +13,12 @@ import { motion } from 'framer-motion';
 import { Search, Plus } from 'lucide-react';
 
 export function Products() {
-  const { products, categories, addProduct, manufacturers } = useErpData();
+  const { products, categories, addProduct, updateProduct, removeProduct, manufacturers } = useErpData();
   const [search, setSearch] = useState('');
 
   // Form State
   const [open, setOpen] = useState(false);
+  const [editingId, setEditingId] = useState('');
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [categoryId, setCategoryId] = useState('');
@@ -30,6 +31,38 @@ export function Products() {
 
   const filtered = products.filter(p => p.name.toLowerCase().includes(search.toLowerCase()) || p.code?.toLowerCase().includes(search.toLowerCase()));
 
+  const resetForm = () => {
+    setEditingId('');
+    setCode('');
+    setName('');
+    setCategoryId('');
+    setManufacturerId('');
+    setShelfLife('');
+    setExpiryRequired('yes');
+    setDescription('');
+    setStatus('Active');
+    setError('');
+  };
+
+  const openAddDialog = () => {
+    resetForm();
+    setOpen(true);
+  };
+
+  const openEditDialog = (product: typeof products[number]) => {
+    setEditingId(product.id);
+    setCode(product.code);
+    setName(product.name);
+    setCategoryId(product.categoryId);
+    setManufacturerId(product.manufacturerId || '');
+    setShelfLife(String(product.shelfLife));
+    setExpiryRequired(product.expiryRequired ? 'yes' : 'no');
+    setDescription(product.description);
+    setStatus(product.status);
+    setError('');
+    setOpen(true);
+  };
+
   const handleSave = () => {
     if (!name.trim()) {
       setError('Product Name is required.');
@@ -41,13 +74,13 @@ export function Products() {
       return;
     }
     
-    if (products.some(p => p.name.toLowerCase() === name.toLowerCase() && p.categoryId === categoryId)) {
+    if (products.some(p => p.id !== editingId && p.name.toLowerCase() === name.toLowerCase() && p.categoryId === categoryId)) {
       setError('A Product with this name already exists in the selected Category.');
       return;
     }
 
-    addProduct({
-      id: Math.random().toString(),
+    const payload = {
+      id: editingId || Math.random().toString(),
       code: code || `PRD-${Math.floor(Math.random() * 1000)}`,
       name,
       categoryId,
@@ -56,18 +89,12 @@ export function Products() {
       expiryRequired: expiryRequired === 'yes',
       description,
       status
-    });
+    };
 
-    // Reset and close
-    setCode('');
-    setName('');
-    setCategoryId('');
-    setManufacturerId('');
-    setShelfLife('');
-    setExpiryRequired('yes');
-    setDescription('');
-    setStatus('Active');
-    setError('');
+    if (editingId) updateProduct(payload);
+    else addProduct(payload);
+
+    resetForm();
     setOpen(false);
   };
 
@@ -76,15 +103,15 @@ export function Products() {
       <div className="flex items-center justify-between">
         <h2 className="text-3xl font-bold tracking-tight text-primary">Products Master</h2>
         
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={(nextOpen) => { setOpen(nextOpen); if (!nextOpen) resetForm(); }}>
           <DialogTrigger asChild>
-            <Button>
+            <Button onClick={openAddDialog}>
               <Plus className="mr-2 h-4 w-4" /> Add Product
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle>Add New Product</DialogTitle>
+              <DialogTitle>{editingId ? 'Edit Product' : 'Add New Product'}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-4">
               {error && <div className="text-sm text-destructive font-medium">{error}</div>}
@@ -219,8 +246,8 @@ export function Products() {
                       <Button variant="ghost" size="sm" asChild>
                         <Link to={`/masters/products/${prod.id}/flavours`}>Manage Flavours</Link>
                       </Button>
-                      <Button variant="ghost" size="sm">Edit</Button>
-                      <Button variant="ghost" size="sm" className="text-destructive">Delete</Button>
+                      <Button variant="ghost" size="sm" onClick={() => openEditDialog(prod)}>Edit</Button>
+                      <Button variant="ghost" size="sm" className="text-destructive" onClick={() => removeProduct(prod.id)}>Delete</Button>
                     </div>
                   </TableCell>
                 </TableRow>

@@ -132,7 +132,6 @@ const trialRecords: SavedTrialRecord[] = [];
 const formulaVersions: FormulaVersionRecord[] = [];
 const sampleInventoryRecords: SampleInventoryRecord[] = [];
 
-const today = () => new Date().toISOString().slice(0, 10);
 const cloneSampleRecord = (record: SampleInventoryRecord): SampleInventoryRecord => ({
   ...record,
   history: record.history.map(entry => ({ ...entry })),
@@ -288,35 +287,7 @@ export const getSampleInventoryRecords = () => sampleInventoryRecords.map(cloneS
 export const getSampleInventoryById = (sampleId: string) => sampleInventoryRecords.find(record => record.sampleId === sampleId) || null;
 
 export const seedSampleInventoryRecords = (materials: Material[]) => {
-  if (sampleInventoryRecords.length > 0) return getSampleInventoryRecords();
-
-  const rawMaterials = materials.filter(material => material.type === 'Raw Material');
-  const seeds = rawMaterials.slice(0, 3);
-
-  seeds.forEach((material, index) => {
-    const receivedQuantity = [25, 18, 12][index] ?? 10;
-    const issuedQuantity = [6, 2, 0][index] ?? 0;
-    const currentBalance = receivedQuantity - issuedQuantity;
-
-    sampleInventoryRecords.push({
-      id: `sample-${index + 1}`,
-      sampleId: `SMP-${String(index + 1).padStart(4, '0')}`,
-      rawMaterialId: material.id,
-      rawMaterialName: material.name,
-      manufacturer: material.supplier,
-      batchNumber: `RND-${material.code}-${index + 1}`,
-      receivedDate: today(),
-      receivedQuantity,
-      unit: material.unit,
-      currentBalance,
-      status: getSampleStatus(currentBalance),
-      history: [
-        { id: `${material.id}-h1`, date: today(), action: 'Receive Sample', quantity: receivedQuantity, balance: receivedQuantity, remarks: 'Initial sample receipt' },
-        ...(issuedQuantity > 0 ? [{ id: `${material.id}-h2`, date: today(), action: 'Issue Sample' as const, quantity: -issuedQuantity, balance: currentBalance, remarks: 'Trial consumption' }] : []),
-      ],
-    });
-  });
-
+  void materials;
   return getSampleInventoryRecords();
 };
 

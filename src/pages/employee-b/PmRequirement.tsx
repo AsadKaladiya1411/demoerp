@@ -15,8 +15,12 @@ type PurchaseStatus = 'Pending' | 'Ordered' | 'In Transit' | 'Delivered';
 
 type SachetRequirement = {
   id: string;
+  materialId: string;
   productName: string;
+  materialName: string;
   requiredQuantity: number;
+  availableQuantity: number;
+  balanceToPurchase: number;
   unit: PurchaseUnit;
   displayUnit: string;
 };
@@ -38,6 +42,7 @@ type SachetPurchaseForm = {
 
 type SachetPurchaseRecord = SachetPurchaseForm & {
   id: string;
+  materialId?: string;
   productName: string;
   requiredQuantity: number;
   requiredUnit: PurchaseUnit;
@@ -48,9 +53,15 @@ type SachetPurchaseRecord = SachetPurchaseForm & {
 
 type BoxRequirement = {
   id: string;
+  flavouredMaterialId?: string;
+  assortedMaterialId?: string;
   productName: string;
   flavouredBoxesRequired: number;
   assortedBoxesRequired: number;
+  flavouredBoxesAvailable: number;
+  assortedBoxesAvailable: number;
+  flavouredBalanceToPurchase: number;
+  assortedBalanceToPurchase: number;
 };
 
 type BoxPurchaseForm = {
@@ -69,6 +80,8 @@ type BoxPurchaseForm = {
 
 type BoxPurchaseRecord = BoxPurchaseForm & {
   id: string;
+  flavouredMaterialId?: string;
+  assortedMaterialId?: string;
   productName: string;
   flavouredBoxesRequired: number;
   assortedBoxesRequired: number;
@@ -112,7 +125,7 @@ function isSachetMaterial(name: string, unit: string) {
 }
 
 export function PmRequirement() {
-  const { products, recipes, materials, productionCalculations, assortedBoxCalculations, requirementReportSelection, sachetPurchaseRecords: records, boxPurchaseRecords: boxRecords, saveSachetPurchaseRecord, saveBoxPurchaseRecord } = useErpData();
+  const { products, recipes, materials, productionPlans, productionCalculations, assortedBoxCalculations, sachetPurchaseRecords: records, boxPurchaseRecords: boxRecords, goodsReceiptRecords, saveSachetPurchaseRecord, saveBoxPurchaseRecord } = useErpData();
   const [selectedRequirementId, setSelectedRequirementId] = useState('');
   const [form, setForm] = useState<SachetPurchaseForm>(emptyForm);
   const [editingId, setEditingId] = useState('');
@@ -125,11 +138,13 @@ export function PmRequirement() {
   const requirements = useMemo<SachetRequirement[]>(() => {
     const totals = new Map<string, SachetRequirement>();
 
-    recipes
-      .filter(recipe => requirementReportSelection.selectedRecipeIds.includes(recipe.id))
-      .forEach(recipe => {
+    productionPlans
+      .forEach(plan => {
+        const recipe = recipes.find(item => item.id === plan.recipeId);
+        if (!recipe) return;
+
         const product = products.find(item => item.id === recipe.productId);
-        const productionKg = Number(requirementReportSelection.productionQtyByRecipe[recipe.id] || recipe.batchSize);
+        const productionKg = Number(plan.quantity || recipe.batchSize);
         const production = calculateProduction(recipe, materials, productionKg);
         const packaging = calculatePackaging(production.totalFinishedUnits, recipe.packaging || [], materials);
 
@@ -138,16 +153,24 @@ export function PmRequirement() {
           if (!isSachetMaterial(item.name || item.materialId, display.unit)) return;
 
           const unit = display.unit === 'Roll' ? 'Roll' : 'Nos';
-          const key = `${recipe.productId}-${unit}`;
+          const material = materials.find(material => material.id === item.materialId);
+          const materialName = item.name || material?.name || item.materialId;
+          const key = `${item.materialId}-${unit}`;
           const existing = totals.get(key);
           const wastageMultiplier = 1 - ((item.wastagePercent || 0) / 100);
           const requiredRollKg = unit === 'Roll' && item.emptySachetWeightG && wastageMultiplier > 0
             ? (item.requiredSachets * item.emptySachetWeightG) / wastageMultiplier / 1000
             : display.quantity;
+          const requiredQuantity = Number(((existing?.requiredQuantity || 0) + requiredRollKg).toFixed(6));
+          const availableQuantity = existing?.availableQuantity ?? (material?.stock ?? 0);
           totals.set(key, {
             id: key,
+            materialId: item.materialId,
             productName: product?.name || recipe.productId,
-            requiredQuantity: Number(((existing?.requiredQuantity || 0) + requiredRollKg).toFixed(6)),
+            materialName,
+            requiredQuantity,
+            availableQuantity,
+            balanceToPurchase: Math.max(0, Number((requiredQuantity - availableQuantity).toFixed(6))),
             unit,
             displayUnit: unit === 'Roll' ? 'KG' : 'Nos',
           });
@@ -155,7 +178,7 @@ export function PmRequirement() {
       });
 
     return Array.from(totals.values()).sort((a, b) => a.productName.localeCompare(b.productName));
-  }, [materials, products, recipes, requirementReportSelection]);
+  }, [materials, productionPlans, products, recipes]);
 
   const selectedRequirement = requirements.find(item => item.id === selectedRequirementId) || null;
   const selectedRequirementQuantityLabel = selectedRequirement?.unit === 'Roll' ? 'Required Sachet KG' : 'Required Quantity';
@@ -172,32 +195,84 @@ export function PmRequirement() {
     : purchasedQuantity * (Number(form.pricePerSachet) || 0);
 
   const boxRequirements = useMemo<BoxRequirement[]>(() => {
-    const selectedRecipes = recipes.filter(recipe => requirementReportSelection.selectedRecipeIds.includes(recipe.id));
-    const productIds = Array.from(new Set(selectedRecipes.map(recipe => recipe.productId)));
+    const productIds = Array.from(new Set(productionPlans.map(plan => plan.productId)));
 
     return productIds.map(productId => {
       const product = products.find(item => item.id === productId);
-      const selectedRecipeIdsForProduct = selectedRecipes
-        .filter(recipe => recipe.productId === productId)
-        .map(recipe => recipe.id);
-      const flavouredBoxesRequired = productionCalculations
-        .filter(item => selectedRecipeIdsForProduct.includes(item.recipeId))
-        .reduce((sum, item) => sum + item.flavouredBoxes, 0);
+      const productRecipes = recipes.filter(recipe => recipe.productId === productId);
+      const boxPackaging = productRecipes.flatMap(recipe => recipe.packaging || []).filter(packaging => {
+        const material = materials.find(item => item.id === packaging.materialId);
+        const name = material?.name || packaging.materialId;
+        return !isSachetMaterial(name, packaging.unit);
+      });
+      const flavouredMaterialId = boxPackaging[0]?.materialId;
+      const assortedMaterialId = boxPackaging[1]?.materialId || boxPackaging[0]?.materialId;
+      const flavouredMaterial = materials.find(item => item.id === flavouredMaterialId);
+      const assortedMaterial = materials.find(item => item.id === assortedMaterialId);
+      const plansForProduct = productionPlans.filter(plan => plan.productId === productId);
+      const flavouredBoxesRequired = plansForProduct.reduce((sum, plan) => {
+        const savedProduction = productionCalculations.find(item => item.recipeId === plan.recipeId);
+        if (savedProduction) return sum + savedProduction.flavouredBoxes;
+
+        const recipe = recipes.find(item => item.id === plan.recipeId);
+        if (!recipe) return sum;
+
+        const production = calculateProduction(recipe, materials, Number(plan.quantity || recipe.batchSize));
+        const flavouredRatio = recipe.boxConfig?.defaultFlavouredPercentage || 0;
+        const sachetsPerBox = recipe.boxConfig?.flavouredBox?.sachetsPerBox || 0;
+        const flavouredSachets = Math.floor(production.totalFinishedUnits * (flavouredRatio / 100));
+        const flavouredBoxes = sachetsPerBox > 0 ? Math.floor(flavouredSachets / sachetsPerBox) : 0;
+        return sum + flavouredBoxes;
+      }, 0);
       const assortedBoxesRequired = assortedBoxCalculations.find(item => item.productId === productId)?.totalAssortedBoxes || 0;
 
       return {
         id: productId,
+        flavouredMaterialId,
+        assortedMaterialId,
         productName: product?.name || productId,
         flavouredBoxesRequired,
         assortedBoxesRequired,
+        flavouredBoxesAvailable: flavouredMaterial?.stock ?? 0,
+        assortedBoxesAvailable: assortedMaterial?.stock ?? 0,
+        flavouredBalanceToPurchase: Math.max(0, flavouredBoxesRequired - (flavouredMaterial?.stock ?? 0)),
+        assortedBalanceToPurchase: Math.max(0, assortedBoxesRequired - (assortedMaterial?.stock ?? 0)),
       };
     }).sort((a, b) => a.productName.localeCompare(b.productName));
-  }, [assortedBoxCalculations, productionCalculations, products, recipes, requirementReportSelection]);
+  }, [assortedBoxCalculations, materials, productionCalculations, productionPlans, products, recipes]);
 
   const selectedBoxRequirement = boxRequirements.find(item => item.id === selectedBoxRequirementId) || null;
   const flavouredTotalPrice = (Number(boxForm.flavouredPurchasedQuantity) || 0) * (Number(boxForm.pricePerFlavouredBox) || 0);
   const assortedTotalPrice = (Number(boxForm.assortedPurchasedQuantity) || 0) * (Number(boxForm.pricePerAssortedBox) || 0);
   const grandTotalPrice = flavouredTotalPrice + assortedTotalPrice;
+  const getReceiptStatus = (purchaseQuantity: number, receivedQuantity: number) => {
+    const pendingQuantity = Math.max(0, purchaseQuantity - receivedQuantity);
+    const receiptStatus = receivedQuantity <= 0
+      ? 'Pending'
+      : pendingQuantity > 0
+        ? 'Partially Received'
+        : 'Received';
+
+    return { pendingQuantity, receiptStatus };
+  };
+  const getSachetReceiptSummary = (record: SachetPurchaseRecord) => {
+    const purchaseQuantity = Number(record.purchasedQuantity) || record.requiredQuantity || 0;
+    const receivedQuantity = goodsReceiptRecords
+      .filter(receipt => receipt.sourceType === 'Sachets' && receipt.sourceId === record.id)
+      .reduce((sum, receipt) => sum + receipt.receivedQuantity, 0);
+
+    return { purchaseQuantity, receivedQuantity, ...getReceiptStatus(purchaseQuantity, receivedQuantity) };
+  };
+  const getBoxLineReceiptSummary = (record: BoxPurchaseRecord, lineType: 'Flavoured' | 'Assorted') => {
+    const purchaseQuantity = lineType === 'Flavoured'
+      ? Number(record.flavouredPurchasedQuantity) || 0
+      : Number(record.assortedPurchasedQuantity) || 0;
+    const receivedQuantity = goodsReceiptRecords
+      .filter(receipt => receipt.sourceType === 'Boxes' && receipt.sourceId === record.id && receipt.lineType === lineType)
+      .reduce((sum, receipt) => sum + receipt.receivedQuantity, 0);
+
+    return { purchaseQuantity, receivedQuantity, ...getReceiptStatus(purchaseQuantity, receivedQuantity) };
+  };
 
   const updateForm = (field: keyof SachetPurchaseForm, value: string) => {
     setForm(prev => ({ ...prev, [field]: value }));
@@ -251,6 +326,7 @@ export function PmRequirement() {
     const payload: SachetPurchaseRecord = {
       ...form,
       id: editingId || Math.random().toString(36).slice(2),
+      materialId: selectedRequirement.materialId,
       productName: selectedRequirement.productName,
       requiredQuantity: selectedRequirement.requiredQuantity,
       requiredUnit: selectedRequirement.unit,
@@ -305,6 +381,8 @@ export function PmRequirement() {
     const payload: BoxPurchaseRecord = {
       ...boxForm,
       id: boxEditingId || Math.random().toString(36).slice(2),
+      flavouredMaterialId: selectedBoxRequirement.flavouredMaterialId,
+      assortedMaterialId: selectedBoxRequirement.assortedMaterialId,
       productName: selectedBoxRequirement.productName,
       flavouredBoxesRequired: selectedBoxRequirement.flavouredBoxesRequired,
       assortedBoxesRequired: selectedBoxRequirement.assortedBoxesRequired,
@@ -349,14 +427,17 @@ export function PmRequirement() {
       <Card>
         <CardHeader>
           <CardTitle>Sachets Requirement List</CardTitle>
-          <CardDescription>Only product requirements from Employee A Requirement Report are shown.</CardDescription>
+          <CardDescription>Sachet requirements are automatically generated from saved production planning records.</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Product Name</TableHead>
+                <TableHead>Material Name</TableHead>
                 <TableHead>Required Quantity</TableHead>
+                <TableHead>Available Stock</TableHead>
+                <TableHead>Balance To Purchase</TableHead>
                 <TableHead>Required Unit</TableHead>
                 <TableHead>Action</TableHead>
               </TableRow>
@@ -365,7 +446,10 @@ export function PmRequirement() {
               {requirements.map(row => (
                 <TableRow key={row.id}>
                   <TableCell>{row.productName}</TableCell>
+                  <TableCell>{row.materialName}</TableCell>
                   <TableCell>{row.requiredQuantity}</TableCell>
+                  <TableCell>{row.availableQuantity}</TableCell>
+                  <TableCell>{row.balanceToPurchase}</TableCell>
                   <TableCell>{row.displayUnit}</TableCell>
                   <TableCell>
                     <Button variant="outline" size="sm" onClick={() => openForm(row)}>Open</Button>
@@ -374,7 +458,7 @@ export function PmRequirement() {
               ))}
               {requirements.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={4} className="py-6 text-center text-muted-foreground">No sachet requirement available. Prepare Requirement Report first.</TableCell>
+                  <TableCell colSpan={7} className="py-6 text-center text-muted-foreground">No sachet requirement available. Save production planning records first.</TableCell>
                 </TableRow>
               )}
             </TableBody>
@@ -397,8 +481,20 @@ export function PmRequirement() {
                   <Input readOnly value={selectedRequirement.productName} />
                 </div>
                 <div className="space-y-2">
+                  <Label>Material Name</Label>
+                  <Input readOnly value={selectedRequirement.materialName} />
+                </div>
+                <div className="space-y-2">
                   <Label>{selectedRequirementQuantityLabel}</Label>
                   <Input readOnly value={selectedRequirement.requiredQuantity} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Available Stock</Label>
+                  <Input readOnly value={selectedRequirement.availableQuantity} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Balance To Purchase</Label>
+                  <Input readOnly value={selectedRequirement.balanceToPurchase} />
                 </div>
                 <div className="space-y-2">
                   <Label>Required Unit</Label>
@@ -544,39 +640,48 @@ export function PmRequirement() {
                 <TableHead>Required Quantity</TableHead>
                 <TableHead>Purchase Unit</TableHead>
                 <TableHead>Purchased Quantity</TableHead>
+                <TableHead>Received Quantity</TableHead>
+                <TableHead>Pending Quantity</TableHead>
                 <TableHead>Supplier</TableHead>
                 <TableHead>PO Number</TableHead>
                 <TableHead>Total Price</TableHead>
                 <TableHead>Delivery Date</TableHead>
                 <TableHead>Receiver Location</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>Purchase Status</TableHead>
+                <TableHead>Receipt Status</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {records.map(record => (
-                <TableRow key={record.id}>
-                  <TableCell>{record.productName}</TableCell>
-                  <TableCell>{record.requiredQuantity} {record.requiredDisplayUnit}</TableCell>
-                  <TableCell>{record.purchaseUnit}</TableCell>
-                  <TableCell>{record.purchasedQuantity}</TableCell>
-                  <TableCell>{record.supplierName || '-'}</TableCell>
-                  <TableCell>{record.poNumber || '-'}</TableCell>
-                  <TableCell>{record.totalPrice}</TableCell>
-                  <TableCell>{record.expectedDeliveryDateTime || '-'}</TableCell>
-                  <TableCell>{record.receiverLocation || '-'}</TableCell>
-                  <TableCell>{record.status}</TableCell>
-                  <TableCell>
-                    <div className="flex gap-2">
-                      <Button variant="ghost" size="sm" onClick={() => editRecord(record)}>View</Button>
-                      <Button variant="ghost" size="sm" onClick={() => editRecord(record)}>Edit</Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {records.map(record => {
+                const receipt = getSachetReceiptSummary(record);
+                return (
+                  <TableRow key={record.id}>
+                    <TableCell>{record.productName}</TableCell>
+                    <TableCell>{record.requiredQuantity} {record.requiredDisplayUnit}</TableCell>
+                    <TableCell>{record.purchaseUnit}</TableCell>
+                    <TableCell>{receipt.purchaseQuantity} {record.purchaseUnit}</TableCell>
+                    <TableCell>{receipt.receivedQuantity} {record.purchaseUnit}</TableCell>
+                    <TableCell>{receipt.pendingQuantity} {record.purchaseUnit}</TableCell>
+                    <TableCell>{record.supplierName || '-'}</TableCell>
+                    <TableCell>{record.poNumber || '-'}</TableCell>
+                    <TableCell>{record.totalPrice}</TableCell>
+                    <TableCell>{record.expectedDeliveryDateTime || '-'}</TableCell>
+                    <TableCell>{record.receiverLocation || '-'}</TableCell>
+                    <TableCell>{record.status}</TableCell>
+                    <TableCell>{receipt.receiptStatus}</TableCell>
+                    <TableCell>
+                      <div className="flex gap-2">
+                        <Button variant="ghost" size="sm" onClick={() => editRecord(record)}>View</Button>
+                        <Button variant="ghost" size="sm" onClick={() => editRecord(record)}>Edit</Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
               {records.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={11} className="py-6 text-center text-muted-foreground">No purchase history yet.</TableCell>
+                  <TableCell colSpan={14} className="py-6 text-center text-muted-foreground">No purchase history yet.</TableCell>
                 </TableRow>
               )}
             </TableBody>
@@ -587,7 +692,7 @@ export function PmRequirement() {
       <Card>
         <CardHeader>
           <CardTitle>Boxes Requirement List</CardTitle>
-          <CardDescription>Product-wise box requirements from Employee A Requirement Report.</CardDescription>
+          <CardDescription>Product-wise box requirements from saved production planning records.</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -595,7 +700,11 @@ export function PmRequirement() {
               <TableRow>
                 <TableHead>Product Name</TableHead>
                 <TableHead>Flavoured Boxes Required</TableHead>
+                <TableHead>Flavoured Available</TableHead>
+                <TableHead>Flavoured Balance</TableHead>
                 <TableHead>Assorted Boxes Required</TableHead>
+                <TableHead>Assorted Available</TableHead>
+                <TableHead>Assorted Balance</TableHead>
                 <TableHead>Action</TableHead>
               </TableRow>
             </TableHeader>
@@ -604,7 +713,11 @@ export function PmRequirement() {
                 <TableRow key={row.id}>
                   <TableCell>{row.productName}</TableCell>
                   <TableCell>{row.flavouredBoxesRequired}</TableCell>
+                  <TableCell>{row.flavouredBoxesAvailable}</TableCell>
+                  <TableCell>{row.flavouredBalanceToPurchase}</TableCell>
                   <TableCell>{row.assortedBoxesRequired}</TableCell>
+                  <TableCell>{row.assortedBoxesAvailable}</TableCell>
+                  <TableCell>{row.assortedBalanceToPurchase}</TableCell>
                   <TableCell>
                     <Button variant="outline" size="sm" onClick={() => openBoxForm(row)}>Open Purchase Record</Button>
                   </TableCell>
@@ -612,7 +725,7 @@ export function PmRequirement() {
               ))}
               {boxRequirements.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={4} className="py-6 text-center text-muted-foreground">No box requirement available. Prepare Requirement Report first.</TableCell>
+                  <TableCell colSpan={8} className="py-6 text-center text-muted-foreground">No box requirement available. Save production planning records first.</TableCell>
                 </TableRow>
               )}
             </TableBody>
@@ -639,8 +752,16 @@ export function PmRequirement() {
                   <Input readOnly className="bg-muted" value={selectedBoxRequirement.flavouredBoxesRequired} />
                 </div>
                 <div className="space-y-2">
+                  <Label>Flavoured Balance To Purchase</Label>
+                  <Input readOnly className="bg-muted" value={selectedBoxRequirement.flavouredBalanceToPurchase} />
+                </div>
+                <div className="space-y-2">
                   <Label>Assorted Boxes Required</Label>
                   <Input readOnly className="bg-muted" value={selectedBoxRequirement.assortedBoxesRequired} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Assorted Balance To Purchase</Label>
+                  <Input readOnly className="bg-muted" value={selectedBoxRequirement.assortedBalanceToPurchase} />
                 </div>
               </div>
             </div>
@@ -759,39 +880,61 @@ export function PmRequirement() {
               <TableRow>
                 <TableHead>Product Name</TableHead>
                 <TableHead>Flavoured Purchased Quantity</TableHead>
+                <TableHead>Flavoured Received</TableHead>
+                <TableHead>Flavoured Pending</TableHead>
                 <TableHead>Assorted Purchased Quantity</TableHead>
+                <TableHead>Assorted Received</TableHead>
+                <TableHead>Assorted Pending</TableHead>
                 <TableHead>Grand Total Price</TableHead>
                 <TableHead>Supplier</TableHead>
                 <TableHead>PO Number</TableHead>
                 <TableHead>Delivery Date</TableHead>
                 <TableHead>Receiver Location</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>Purchase Status</TableHead>
+                <TableHead>Receipt Status</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {boxRecords.map(record => (
-                <TableRow key={record.id}>
-                  <TableCell>{record.productName}</TableCell>
-                  <TableCell>{record.flavouredPurchasedQuantity || 0}</TableCell>
-                  <TableCell>{record.assortedPurchasedQuantity || 0}</TableCell>
-                  <TableCell>{record.grandTotalPrice}</TableCell>
-                  <TableCell>{record.supplierName || '-'}</TableCell>
-                  <TableCell>{record.poNumber || '-'}</TableCell>
-                  <TableCell>{record.expectedDeliveryDateTime || '-'}</TableCell>
-                  <TableCell>{record.receiverLocation || '-'}</TableCell>
-                  <TableCell>{record.status}</TableCell>
-                  <TableCell>
-                    <div className="flex gap-2">
-                      <Button variant="ghost" size="sm" onClick={() => editBoxRecord(record)}>View</Button>
-                      <Button variant="ghost" size="sm" onClick={() => editBoxRecord(record)}>Edit</Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {boxRecords.map(record => {
+                const flavouredReceipt = getBoxLineReceiptSummary(record, 'Flavoured');
+                const assortedReceipt = getBoxLineReceiptSummary(record, 'Assorted');
+                const receiptStatus = [flavouredReceipt, assortedReceipt]
+                  .filter(receipt => receipt.purchaseQuantity > 0)
+                  .every(receipt => receipt.pendingQuantity <= 0)
+                  ? 'Received'
+                  : [flavouredReceipt, assortedReceipt].some(receipt => receipt.receivedQuantity > 0)
+                    ? 'Partially Received'
+                    : 'Pending';
+
+                return (
+                  <TableRow key={record.id}>
+                    <TableCell>{record.productName}</TableCell>
+                    <TableCell>{flavouredReceipt.purchaseQuantity}</TableCell>
+                    <TableCell>{flavouredReceipt.receivedQuantity}</TableCell>
+                    <TableCell>{flavouredReceipt.pendingQuantity}</TableCell>
+                    <TableCell>{assortedReceipt.purchaseQuantity}</TableCell>
+                    <TableCell>{assortedReceipt.receivedQuantity}</TableCell>
+                    <TableCell>{assortedReceipt.pendingQuantity}</TableCell>
+                    <TableCell>{record.grandTotalPrice}</TableCell>
+                    <TableCell>{record.supplierName || '-'}</TableCell>
+                    <TableCell>{record.poNumber || '-'}</TableCell>
+                    <TableCell>{record.expectedDeliveryDateTime || '-'}</TableCell>
+                    <TableCell>{record.receiverLocation || '-'}</TableCell>
+                    <TableCell>{record.status}</TableCell>
+                    <TableCell>{receiptStatus}</TableCell>
+                    <TableCell>
+                      <div className="flex gap-2">
+                        <Button variant="ghost" size="sm" onClick={() => editBoxRecord(record)}>View</Button>
+                        <Button variant="ghost" size="sm" onClick={() => editBoxRecord(record)}>Edit</Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
               {boxRecords.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={10} className="py-6 text-center text-muted-foreground">No box purchase history yet.</TableCell>
+                  <TableCell colSpan={15} className="py-6 text-center text-muted-foreground">No box purchase history yet.</TableCell>
                 </TableRow>
               )}
             </TableBody>

@@ -38,8 +38,18 @@ type RequirementRow = {
   materialId: string;
   materialName: string;
   requiredQuantity: number;
+  availableQuantity: number;
+  balanceToPurchase: number;
   unit: string;
 };
+
+const normalizeRequirementRecipeUnits = <T extends { materials: Array<{ unit: string }> }>(recipe: T): T => ({
+  ...recipe,
+  materials: recipe.materials.map(material => ({
+    ...material,
+    unit: material.unit === '%' ? 'kg' : material.unit || 'kg',
+  })),
+});
 
 const emptyForm: PurchaseForm = {
   purchasedQuantity: '',
@@ -55,7 +65,7 @@ const emptyForm: PurchaseForm = {
 };
 
 export function RmRequirement() {
-  const { recipes, materials, requirementReportSelection, rmPurchaseRecords: records, saveRmPurchaseRecord } = useErpData();
+  const { recipes, materials, productionPlans, rmPurchaseRecords: records, goodsReceiptRecords, saveRmPurchaseRecord } = useErpData();
   const [selectedMaterialId, setSelectedMaterialId] = useState('');
   const [form, setForm] = useState<PurchaseForm>(emptyForm);
   const [editingId, setEditingId] = useState('');
@@ -64,28 +74,48 @@ export function RmRequirement() {
   const requirementRows = useMemo<RequirementRow[]>(() => {
     const totals = new Map<string, RequirementRow>();
 
-    recipes
-      .filter(recipe => requirementReportSelection.selectedRecipeIds.includes(recipe.id))
-      .forEach(recipe => {
-      const productionKg = Number(requirementReportSelection.productionQtyByRecipe[recipe.id] || recipe.batchSize);
-      const production = calculateProduction(recipe, materials, productionKg);
+    productionPlans.forEach(plan => {
+      const recipe = recipes.find(item => item.id === plan.recipeId);
+      if (!recipe) return;
+
+      const production = calculateProduction(normalizeRequirementRecipeUnits(recipe), materials, plan.quantity);
       production.rawMaterials.forEach(row => {
-        const key = `${row.materialId}-${row.unit}`;
+        const materialName = row.name || row.materialId;
+        const material = materials.find(item => item.id === row.materialId || item.name === materialName);
+        const availableQuantity = material?.stock ?? 0;
+        const key = `${materialName.trim().toLowerCase()}-${row.unit}`;
         const existing = totals.get(key);
+        const requiredQuantity = Math.ceil((existing?.requiredQuantity || 0) + row.required);
         totals.set(key, {
-          materialId: row.materialId,
-          materialName: row.name || row.materialId,
-          requiredQuantity: Number(((existing?.requiredQuantity || 0) + row.required).toFixed(6)),
+          materialId: existing?.materialId || material?.id || materialName,
+          materialName,
+          requiredQuantity,
+          availableQuantity: existing?.availableQuantity ?? availableQuantity,
+          balanceToPurchase: Math.max(0, requiredQuantity - (existing?.availableQuantity ?? availableQuantity)),
           unit: row.unit,
         });
       });
     });
 
     return Array.from(totals.values()).sort((a, b) => a.materialName.localeCompare(b.materialName));
-  }, [materials, recipes, requirementReportSelection]);
+  }, [materials, productionPlans, recipes]);
 
   const selectedRequirement = requirementRows.find(row => row.materialId === selectedMaterialId) || null;
   const totalPrice = (Number(form.purchasedQuantity) || 0) * (Number(form.pricePerUnit) || 0);
+  const getReceiptSummary = (record: PurchaseRecord) => {
+    const purchaseQuantity = Number(record.purchasedQuantity) || record.requiredQuantity || 0;
+    const receivedQuantity = goodsReceiptRecords
+      .filter(receipt => receipt.sourceType === 'Raw Materials' && receipt.sourceId === record.id)
+      .reduce((sum, receipt) => sum + receipt.receivedQuantity, 0);
+    const pendingQuantity = Math.max(0, purchaseQuantity - receivedQuantity);
+    const receiptStatus = receivedQuantity <= 0
+      ? 'Pending'
+      : pendingQuantity > 0
+        ? 'Partially Received'
+        : 'Received';
+
+    return { purchaseQuantity, receivedQuantity, pendingQuantity, receiptStatus };
+  };
 
   const updateForm = (field: keyof PurchaseForm, value: string) => {
     setForm(prev => ({ ...prev, [field]: value }));
@@ -155,7 +185,7 @@ export function RmRequirement() {
             <PackageOpen className="h-5 w-5 text-primary" />
             Raw Material Requirement List
           </CardTitle>
-          <CardDescription>Only raw materials from Employee A Requirement Report are shown here.</CardDescription>
+          <CardDescription>Raw materials are automatically consolidated from saved production planning records.</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -163,6 +193,8 @@ export function RmRequirement() {
               <TableRow>
                 <TableHead>Material Name</TableHead>
                 <TableHead>Required Quantity</TableHead>
+                <TableHead>Available Stock</TableHead>
+                <TableHead>Balance To Purchase</TableHead>
                 <TableHead>Unit</TableHead>
                 <TableHead>Action</TableHead>
               </TableRow>
@@ -172,6 +204,8 @@ export function RmRequirement() {
                 <TableRow key={`${row.materialId}-${row.unit}`}>
                   <TableCell>{row.materialName}</TableCell>
                   <TableCell>{row.requiredQuantity}</TableCell>
+                  <TableCell>{row.availableQuantity}</TableCell>
+                  <TableCell>{row.balanceToPurchase}</TableCell>
                   <TableCell>{row.unit}</TableCell>
                   <TableCell>
                     <Button variant="outline" size="sm" onClick={() => openNewForm(row.materialId)}>Select</Button>
@@ -180,7 +214,7 @@ export function RmRequirement() {
               ))}
               {requirementRows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={4} className="py-6 text-center text-muted-foreground">No RM requirement available. Prepare Requirement Report first.</TableCell>
+                  <TableCell colSpan={6} className="py-6 text-center text-muted-foreground">No RM requirement available. Save production planning records first.</TableCell>
                 </TableRow>
               )}
             </TableBody>
@@ -319,38 +353,47 @@ export function RmRequirement() {
                 <TableHead>Material Name</TableHead>
                 <TableHead>Required Quantity</TableHead>
                 <TableHead>Purchased Quantity</TableHead>
+                <TableHead>Received Quantity</TableHead>
+                <TableHead>Pending Quantity</TableHead>
                 <TableHead>Price Per Unit</TableHead>
                 <TableHead>Total Price</TableHead>
                 <TableHead>Supplier</TableHead>
                 <TableHead>PO Number</TableHead>
                 <TableHead>Delivery Date</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>Purchase Status</TableHead>
+                <TableHead>Receipt Status</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {records.map(record => (
-                <TableRow key={record.id}>
-                  <TableCell>{record.materialName}</TableCell>
-                  <TableCell>{record.requiredQuantity} {record.unit}</TableCell>
-                  <TableCell>{record.purchasedQuantity} {record.unit}</TableCell>
-                  <TableCell>{record.pricePerUnit}</TableCell>
-                  <TableCell>{record.totalPrice}</TableCell>
-                  <TableCell>{record.supplierName || '-'}</TableCell>
-                  <TableCell>{record.poNumber || '-'}</TableCell>
-                  <TableCell>{record.expectedDeliveryDateTime || '-'}</TableCell>
-                  <TableCell>{record.status}</TableCell>
-                  <TableCell>
-                    <div className="flex gap-2">
-                      <Button variant="ghost" size="sm" onClick={() => editRecord(record)}>View</Button>
-                      <Button variant="ghost" size="sm" onClick={() => editRecord(record)}>Edit</Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {records.map(record => {
+                const receipt = getReceiptSummary(record);
+                return (
+                  <TableRow key={record.id}>
+                    <TableCell>{record.materialName}</TableCell>
+                    <TableCell>{record.requiredQuantity} {record.unit}</TableCell>
+                    <TableCell>{receipt.purchaseQuantity} {record.unit}</TableCell>
+                    <TableCell>{receipt.receivedQuantity} {record.unit}</TableCell>
+                    <TableCell>{receipt.pendingQuantity} {record.unit}</TableCell>
+                    <TableCell>{record.pricePerUnit}</TableCell>
+                    <TableCell>{record.totalPrice}</TableCell>
+                    <TableCell>{record.supplierName || '-'}</TableCell>
+                    <TableCell>{record.poNumber || '-'}</TableCell>
+                    <TableCell>{record.expectedDeliveryDateTime || '-'}</TableCell>
+                    <TableCell>{record.status}</TableCell>
+                    <TableCell>{receipt.receiptStatus}</TableCell>
+                    <TableCell>
+                      <div className="flex gap-2">
+                        <Button variant="ghost" size="sm" onClick={() => editRecord(record)}>View</Button>
+                        <Button variant="ghost" size="sm" onClick={() => editRecord(record)}>Edit</Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
               {records.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={10} className="py-6 text-center text-muted-foreground">No purchase history yet.</TableCell>
+                  <TableCell colSpan={13} className="py-6 text-center text-muted-foreground">No purchase history yet.</TableCell>
                 </TableRow>
               )}
             </TableBody>

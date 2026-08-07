@@ -1,5 +1,5 @@
-import React, { createContext, useEffect, useMemo, useContext, useState, type ReactNode } from 'react';
-import productionLib, { MASTER_FORMULA_GRAMS, normalizeRecipeBoxConfig, type ProductionSummary, type RecipeBoxConfig } from '@/lib/production';
+import React, { createContext, useCallback, useEffect, useMemo, useContext, useState, type ReactNode } from 'react';
+import productionLib, { MASTER_FORMULA_GRAMS, type ProductionSummary, type RecipeBoxConfig } from '@/lib/production';
 
 export { MASTER_FORMULA_GRAMS };
 export type { ProductionSummary };
@@ -122,6 +122,7 @@ export interface EmployeeBRmPurchaseRecord {
 }
 export interface EmployeeBSachetPurchaseRecord {
   id: string;
+  materialId?: string;
   productName: string;
   requiredQuantity: number;
   requiredUnit: 'Roll' | 'Nos';
@@ -144,6 +145,8 @@ export interface EmployeeBSachetPurchaseRecord {
 }
 export interface EmployeeBBoxPurchaseRecord {
   id: string;
+  flavouredMaterialId?: string;
+  assortedMaterialId?: string;
   productName: string;
   flavouredBoxesRequired: number;
   assortedBoxesRequired: number;
@@ -178,6 +181,8 @@ export interface GoodsReceiptRecord {
   receivedQuantity: number;
   qaSampleQuantity: number;
   availableQuantity: number;
+  remainingQuantity?: number;
+  expiryDate?: string;
   receivedDate: string;
   receivedBy: string;
   remarks: string;
@@ -196,6 +201,8 @@ export interface MaterialTestSlip {
   receivedQuantity: number;
   qaSampleQuantity: number;
   availableQuantity: number;
+  remainingQuantity?: number;
+  expiryDate?: string;
   unit: string;
   receivedDate: string;
   receivedBy: string;
@@ -235,6 +242,7 @@ export interface ProductionIssueRecord {
   issuedQuantity: number;
   unit: string;
   batchNumber: string;
+  fifoBatches?: string;
   issueDate: string;
   issuedBy: string;
   remarks: string;
@@ -356,7 +364,11 @@ interface ErpContextType {
   
   // Basic setter functions for prototype interactivity
   addCategory: (c: Category) => void;
+  updateCategory: (c: Category) => void;
+  removeCategory: (id: string) => void;
   addProduct: (p: Product) => void;
+  updateProduct: (p: Product) => void;
+  removeProduct: (id: string) => void;
   addFlavour: (f: Flavour) => void;
   updateFlavour: (f: Flavour) => void;
   removeFlavour: (id: string) => void;
@@ -408,381 +420,47 @@ const getGoodsReceiptStatus = (purchaseQuantity: number, receivedQuantity: numbe
 
 const getGoodsReceiptKey = (sourceType: GoodsReceiptMaterialType, sourceId: string, lineType?: GoodsReceiptLineType) => `${sourceType}:${sourceId}:${lineType || 'Standard'}`;
 
-const defaultCategories: Category[] = [
-  {
-    id: 'cat-nutrition',
-    code: 'CAT-NUT',
-    name: 'Nutrition Powder',
-    description: 'Sachet based nutrition powder products.',
-    status: 'Active',
-    createdDate: '2026-01-01',
-  },
-  {
-    id: 'cat-beverage',
-    code: 'CAT-BEV',
-    name: 'Instant Beverage',
-    description: 'Ready mix beverage powder products.',
-    status: 'Active',
-    createdDate: '2026-01-01',
-  },
-];
-
-const defaultManufacturers: Manufacturer[] = [
-  {
-    id: 'mfg-jolly',
-    name: 'Jolly Foods Manufacturing',
-    contactPerson: 'Ramesh Patel',
-    gst: '24ABCDE1234F1Z5',
-    address: 'GIDC Industrial Estate, Ahmedabad, Gujarat',
-    mobile: '9876543210',
-    email: 'production@jollyfoods.example',
-    status: 'Active',
-  },
-  {
-    id: 'mfg-packwell',
-    name: 'Packwell Co-Packers',
-    contactPerson: 'Mehul Shah',
-    gst: '24PQRSX9876L1Z8',
-    address: 'Sanand Industrial Area, Gujarat',
-    mobile: '9876501234',
-    email: 'ops@packwell.example',
-    status: 'Active',
-  },
-];
-
-const defaultProducts: Product[] = [
-  {
-    id: 'prod-protein',
-    code: 'PRD-PRO-001',
-    name: 'Protein Nutrition Sachet',
-    categoryId: 'cat-nutrition',
-    manufacturerId: 'mfg-jolly',
-    shelfLife: 12,
-    expiryRequired: true,
-    description: '30 g single serve protein nutrition sachet.',
-    status: 'Active',
-  },
-  {
-    id: 'prod-shake',
-    code: 'PRD-SHK-001',
-    name: 'Instant Milk Shake Sachet',
-    categoryId: 'cat-beverage',
-    manufacturerId: 'mfg-packwell',
-    shelfLife: 9,
-    expiryRequired: true,
-    description: 'Single serve instant flavoured milk shake powder.',
-    status: 'Active',
-  },
-];
-
-const defaultFlavours: Flavour[] = [
-  { id: 'flv-chocolate', name: 'Chocolate', productId: 'prod-protein', status: 'Active' },
-  { id: 'flv-vanilla', name: 'Vanilla', productId: 'prod-protein', status: 'Active' },
-  { id: 'flv-mango', name: 'Mango', productId: 'prod-protein', status: 'Active' },
-  { id: 'flv-strawberry', name: 'Strawberry', productId: 'prod-shake', status: 'Active' },
-  { id: 'flv-kesar', name: 'Kesar Pista', productId: 'prod-shake', status: 'Active' },
-];
-
-const defaultRecipes: Recipe[] = [
-  {
-    id: 'rec-chocolate-v1',
-    productId: 'prod-protein',
-    flavourId: 'flv-chocolate',
-    version: 'CHOC-v1',
-    masterQuantity: 100,
-    batchSize: 500,
-    servingSize: '30 g',
-    packSize: '30 g Sachet',
-    materials: [
-      { materialId: 'mat-1', quantity: 45, unit: '%', make: 'Base' },
-      { materialId: 'mat-2', quantity: 25, unit: '%', make: 'Sweetener' },
-      { materialId: 'mat-3', quantity: 15, unit: '%', make: 'Flavour' },
-      { materialId: 'mat-4', quantity: 10, unit: '%', make: 'Dairy' },
-      { materialId: 'mat-5', quantity: 5, unit: '%', make: 'Premix' },
-    ],
-    packaging: [
-      { materialId: 'mat-6', unit: 'Roll', rollWeightKg: 100, emptySachetWeightG: 1.2, wastagePercent: 2 },
-    ],
-    boxConfig: {
-      defaultAssortedPercentage: 70,
-      defaultFlavouredPercentage: 30,
-      flavouredBox: { sachetsPerBox: 10 },
-      assortedBox: {
-        sachetsPerBox: 4,
-        allowedFlavourIds: ['flv-chocolate', 'flv-vanilla', 'flv-mango'],
-        composition: { 'flv-chocolate': 2, 'flv-vanilla': 1, 'flv-mango': 1 },
-      },
-    },
-  },
-  {
-    id: 'rec-vanilla-v1',
-    productId: 'prod-protein',
-    flavourId: 'flv-vanilla',
-    version: 'VAN-v1',
-    masterQuantity: 100,
-    batchSize: 500,
-    servingSize: '30 g',
-    packSize: '30 g Sachet',
-    materials: [
-      { materialId: 'mat-1', quantity: 48, unit: '%', make: 'Base' },
-      { materialId: 'mat-2', quantity: 27, unit: '%', make: 'Sweetener' },
-      { materialId: 'mat-4', quantity: 18, unit: '%', make: 'Dairy' },
-      { materialId: 'mat-5', quantity: 7, unit: '%', make: 'Premix' },
-    ],
-    packaging: [
-      { materialId: 'mat-6', unit: 'Roll', rollWeightKg: 100, emptySachetWeightG: 1.2, wastagePercent: 2 },
-    ],
-    boxConfig: {
-      defaultAssortedPercentage: 70,
-      defaultFlavouredPercentage: 30,
-      flavouredBox: { sachetsPerBox: 10 },
-      assortedBox: {
-        sachetsPerBox: 4,
-        allowedFlavourIds: ['flv-chocolate', 'flv-vanilla', 'flv-mango'],
-        composition: { 'flv-chocolate': 1, 'flv-vanilla': 2, 'flv-mango': 1 },
-      },
-    },
-  },
-  {
-    id: 'rec-mango-v1',
-    productId: 'prod-protein',
-    flavourId: 'flv-mango',
-    version: 'MNG-v1',
-    masterQuantity: 100,
-    batchSize: 400,
-    servingSize: '30 g',
-    packSize: '30 g Sachet',
-    materials: [
-      { materialId: 'mat-1', quantity: 44, unit: '%', make: 'Base' },
-      { materialId: 'mat-2', quantity: 30, unit: '%', make: 'Sweetener' },
-      { materialId: 'mat-4', quantity: 18, unit: '%', make: 'Dairy' },
-      { materialId: 'mat-5', quantity: 8, unit: '%', make: 'Premix' },
-    ],
-    packaging: [
-      { materialId: 'mat-6', unit: 'Roll', rollWeightKg: 100, emptySachetWeightG: 1.2, wastagePercent: 2 },
-    ],
-    boxConfig: {
-      defaultAssortedPercentage: 70,
-      defaultFlavouredPercentage: 30,
-      flavouredBox: { sachetsPerBox: 10 },
-      assortedBox: {
-        sachetsPerBox: 4,
-        allowedFlavourIds: ['flv-chocolate', 'flv-vanilla', 'flv-mango'],
-        composition: { 'flv-chocolate': 1, 'flv-vanilla': 1, 'flv-mango': 2 },
-      },
-    },
-  },
-];
-
-const defaultProductionPlans: ProductionPlan[] = [
-  {
-    id: 'plan-chocolate-demo',
-    productId: 'prod-protein',
-    flavourId: 'flv-chocolate',
-    recipeId: 'rec-chocolate-v1',
-    manufacturerId: 'mfg-jolly',
-    batch: 'BATCH-CHOC-001',
-    mfgDate: '2026-07-15',
-    quantity: 500,
-    type: 'Normal',
-    status: 'Approved',
-  },
-  {
-    id: 'plan-vanilla-demo',
-    productId: 'prod-protein',
-    flavourId: 'flv-vanilla',
-    recipeId: 'rec-vanilla-v1',
-    manufacturerId: 'mfg-jolly',
-    batch: 'BATCH-VAN-001',
-    mfgDate: '2026-07-18',
-    quantity: 300,
-    type: 'Normal',
-    status: 'Pending Approval',
-  },
-];
-
+const defaultCategories: Category[] = [];
+const defaultManufacturers: Manufacturer[] = [];
+const defaultProducts: Product[] = [];
+const defaultFlavours: Flavour[] = [];
+const defaultRecipes: Recipe[] = [];
+const defaultProductionPlans: ProductionPlan[] = [];
 const defaultProductionCalculations: ProductionCalculation[] = [];
 const defaultRequirementReportSelection: RequirementReportSelection = {
   selectedRecipeIds: [],
   productionQtyByRecipe: {},
 };
 const defaultAssortedBoxCalculations: AssortedBoxCalculation[] = [];
-const defaultRmPurchaseRecords: EmployeeBRmPurchaseRecord[] = [
-  {
-    id: 'rm-purchase-demo-1',
-    materialId: 'mat-1',
-    materialName: 'MPC 85',
-    requiredQuantity: 225,
-    unit: 'kg',
-    purchasedQuantity: '250',
-    purchaseDate: '2026-08-01',
-    expiryDate: '2027-07-31',
-    pricePerUnit: '420',
-    supplierName: 'Global Dairy',
-    poNumber: 'RM-PO-001',
-    expectedDeliveryDateTime: '2026-08-04T11:00',
-    receiverLocation: 'Main Warehouse',
-    documents: 'Pending PO.pdf, COA.pdf',
-    remarks: 'Demo bulk raw material purchase.',
-    status: 'Ordered',
-    totalPrice: 105000,
-  },
-  {
-    id: 'rm-purchase-demo-2',
-    materialId: 'mat-2',
-    materialName: 'Sugar',
-    requiredQuantity: 150,
-    unit: 'kg',
-    purchasedQuantity: '150',
-    purchaseDate: '2026-08-02',
-    expiryDate: '2028-01-15',
-    pricePerUnit: '42',
-    supplierName: 'Sweet Co',
-    poNumber: 'RM-PO-002',
-    expectedDeliveryDateTime: '2026-08-02T15:30',
-    receiverLocation: 'Raw Material Store',
-    documents: 'Invoice.pdf, Transport Copy.pdf',
-    remarks: 'Received for demo production batch.',
-    status: 'Delivered',
-    totalPrice: 6300,
-  },
-];
-const defaultSachetPurchaseRecords: EmployeeBSachetPurchaseRecord[] = [
-  {
-    id: 'sachet-purchase-demo-1',
-    productName: 'Protein Nutrition Sachet',
-    requiredQuantity: 120,
-    requiredUnit: 'Roll',
-    requiredDisplayUnit: 'KG',
-    purchaseUnit: 'Roll',
-    purchasedQuantity: '50',
-    weightPerRollKg: '25',
-    pricePerKg: '180',
-    pricePerSachet: '',
-    purchaseDate: '2026-08-03',
-    supplierName: 'Print Flex',
-    poNumber: 'PF-PO-001',
-    expectedDeliveryDateTime: '2026-08-05T10:30',
-    receiverLocation: 'Main Warehouse',
-    documents: 'Pending PO.pdf, Transport Copy.pdf',
-    remarks: 'First lot ordered for demo production.',
-    status: 'Ordered',
-    totalWeight: 1250,
-    totalPrice: 225000,
-  },
-];
-const defaultBoxPurchaseRecords: EmployeeBBoxPurchaseRecord[] = [
-  {
-    id: 'box-purchase-demo-1',
-    productName: 'Protein Nutrition Sachet',
-    flavouredBoxesRequired: 500,
-    assortedBoxesRequired: 300,
-    flavouredPurchasedQuantity: '500',
-    pricePerFlavouredBox: '12',
-    assortedPurchasedQuantity: '300',
-    pricePerAssortedBox: '14',
-    purchaseDate: '2026-08-03',
-    supplierName: 'Pack Solutions',
-    poNumber: 'BOX-PO-001',
-    expectedDeliveryDateTime: '2026-08-06T14:00',
-    receiverLocation: 'Packaging Store',
-    documents: 'Invoice.pdf, Transport Copy.pdf',
-    remarks: 'Demo box purchase record.',
-    status: 'In Transit',
-    flavouredTotalPrice: 6000,
-    assortedTotalPrice: 4200,
-    grandTotalPrice: 10200,
-  },
-];
+const defaultRmPurchaseRecords: EmployeeBRmPurchaseRecord[] = [];
+const defaultSachetPurchaseRecords: EmployeeBSachetPurchaseRecord[] = [];
+const defaultBoxPurchaseRecords: EmployeeBBoxPurchaseRecord[] = [];
+const defaultMaterials: Material[] = [];
+const defaultVendors: Vendor[] = [];
+const defaultVendorHistoryRecords: VendorHistoryRecord[] = [];
 
-const defaultMaterials: Material[] = [
-  { id: 'mat-1', code: 'RM-MPC-85', name: 'MPC 85', type: 'Raw Material', unit: 'kg', shelfLife: 12, expiryRequired: true, supplier: 'Global Dairy', status: 'Active', stock: 500, minStock: 100, lastUpdated: '2026-08-01' },
-  { id: 'mat-2', code: 'RM-SUG-01', name: 'Sugar', type: 'Raw Material', unit: 'kg', shelfLife: 24, expiryRequired: false, supplier: 'Sweet Co', status: 'Active', stock: 1000, minStock: 200, lastUpdated: '2026-08-01' },
-  { id: 'mat-3', code: 'RM-COC-01', name: 'Cocoa Powder', type: 'Raw Material', unit: 'kg', shelfLife: 18, expiryRequired: true, supplier: 'Cocoa Traders', status: 'Active', stock: 250, minStock: 50, lastUpdated: '2026-08-01' },
-  { id: 'mat-4', code: 'RM-MLK-01', name: 'Milk Powder', type: 'Raw Material', unit: 'kg', shelfLife: 12, expiryRequired: true, supplier: 'Global Dairy', status: 'Active', stock: 400, minStock: 75, lastUpdated: '2026-08-01' },
-  { id: 'mat-5', code: 'RM-VIT-01', name: 'Vitamin Mix', type: 'Raw Material', unit: 'kg', shelfLife: 18, expiryRequired: true, supplier: 'NutriChem', status: 'Active', stock: 120, minStock: 25, lastUpdated: '2026-08-01' },
-  { id: 'mat-6', code: 'PM-SCH-ROLL', name: 'Sachet Roll', type: 'Packaging Material', unit: 'Roll', shelfLife: 0, expiryRequired: false, supplier: 'Print Flex', status: 'Active', stock: 100, minStock: 20, packWeightKg: 100, lastUpdated: '2026-08-01' },
-  { id: 'mat-7', code: 'PM-SCH-NOS', name: 'Empty Sachets', type: 'Packaging Material', unit: 'Nos', shelfLife: 0, expiryRequired: false, supplier: 'Sachet Pack', status: 'Active', stock: 50000, minStock: 10000, lastUpdated: '2026-08-01' },
-  { id: 'mat-8', code: 'PM-BOX-01', name: 'Boxes', type: 'Packaging Material', unit: 'Nos', shelfLife: 0, expiryRequired: false, supplier: 'Pack Solutions', status: 'Active', stock: 2000, minStock: 500, lastUpdated: '2026-08-01' },
-];
+const LEGACY_ERP_STORAGE_KEYS = ['jolly-erp-state', 'jolly-erp-state-v2'];
+const ERP_STORAGE_KEY = 'jolly-erp-state-v3';
 
-const defaultVendors: Vendor[] = [
-  {
-    id: 'vendor-1',
-    code: 'VND-0001',
-    name: 'Global Dairy Supplies',
-    manufacturerName: 'Global Dairy',
-    vendorTypes: ['Raw Material'],
-    status: 'Active',
-    contactPerson: 'Ramesh Shah',
-    mobile: '9876543210',
-    alternateMobile: '9876500001',
-    email: 'sales@globaldairy.example',
-    website: 'https://globaldairy.example',
-    address: 'GIDC Phase 2',
-    city: 'Ahmedabad',
-    state: 'Gujarat',
-    country: 'India',
-    pinCode: '382445',
-    gstNumber: '24ABCDE1234F1Z5',
-    panNumber: 'ABCDE1234F',
-    paymentTerms: '30 Days',
-    leadTimeDays: 7,
-    materialIds: ['mat-1', 'mat-4'],
-    documents: {
-      gstCertificate: 'GST Certificate.pdf',
-      fssaiCertificate: 'FSSAI.pdf',
-      coaSample: 'COA Sample.pdf',
-      agreement: 'Supply Agreement.pdf',
-      otherDocuments: '',
-    },
-    createdDate: '2026-08-01',
-  },
-  {
-    id: 'vendor-2',
-    code: 'VND-0002',
-    name: 'Pack Solutions',
-    manufacturerName: 'Pack Solutions',
-    vendorTypes: ['Packaging Material'],
-    status: 'Active',
-    contactPerson: 'Mehul Patel',
-    mobile: '9876543222',
-    alternateMobile: '',
-    email: 'orders@packsolutions.example',
-    website: '',
-    address: 'Packaging Industrial Park',
-    city: 'Vadodara',
-    state: 'Gujarat',
-    country: 'India',
-    pinCode: '390010',
-    gstNumber: '24PACKS9876L1Z8',
-    panNumber: 'PACKS9876L',
-    paymentTerms: 'Advance',
-    leadTimeDays: 10,
-    materialIds: ['mat-6', 'mat-8'],
-    documents: {
-      gstCertificate: 'GST.pdf',
-      fssaiCertificate: '',
-      coaSample: '',
-      agreement: 'Packaging Agreement.pdf',
-      otherDocuments: 'Rate Card.xlsx',
-    },
-    createdDate: '2026-08-01',
-  },
-];
-
-const defaultVendorHistoryRecords: VendorHistoryRecord[] = [
-  { id: 'vh-1', vendorId: 'vendor-1', action: 'Created', actionDate: '2026-08-01', description: 'Vendor created in master.' },
-  { id: 'vh-2', vendorId: 'vendor-2', action: 'Created', actionDate: '2026-08-01', description: 'Vendor created in master.' },
-];
-
-const ERP_STORAGE_KEY = 'jolly-erp-state';
+const normalizeRecipeMaterialUnits = (recipe: Recipe): Recipe => ({
+  ...recipe,
+  materials: recipe.materials.map(material => ({
+    ...material,
+    unit: material.unit === '%' ? 'kg' : material.unit || 'kg',
+  })),
+});
 
 const readPersistedState = (): Partial<ErpPersistedState> | null => {
   if (typeof window === 'undefined') return null;
   try {
+    LEGACY_ERP_STORAGE_KEYS.forEach(key => window.localStorage.removeItem(key));
     const raw = window.localStorage.getItem(ERP_STORAGE_KEY);
-    return raw ? JSON.parse(raw) as Partial<ErpPersistedState> : null;
+    if (!raw) return null;
+    const state = JSON.parse(raw) as Partial<ErpPersistedState>;
+    return {
+      ...state,
+      recipes: state.recipes?.map(normalizeRecipeMaterialUnits),
+    };
   } catch {
     return null;
   }
@@ -793,7 +471,7 @@ const writePersistedState = (state: ErpPersistedState) => {
   try {
     window.localStorage.setItem(ERP_STORAGE_KEY, JSON.stringify(state));
   } catch {
-    // Ignore storage failures in the demo app.
+    // Ignore storage failures in the app.
   }
 };
 
@@ -878,6 +556,179 @@ export const ErpProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     window.alert(message);
   };
 
+  const resolveInventoryMaterialId = useCallback((input: {
+    sourceType?: GoodsReceiptMaterialType;
+    sourceId?: string;
+    lineType?: GoodsReceiptLineType;
+    materialId?: string;
+    materialName?: string;
+  }) => {
+    if (input.materialId && materials.some(material => material.id === input.materialId)) return input.materialId;
+    const getNameTokens = (value?: string) => new Set((value || '').toLowerCase().match(/[a-z0-9]+/g) || []);
+    const getTokenScore = (left?: string, right?: string) => {
+      const leftTokens = getNameTokens(left);
+      const rightTokens = getNameTokens(right);
+      return Array.from(leftTokens).filter(token => token.length > 2 && rightTokens.has(token)).length;
+    };
+
+    if (input.sourceType === 'Raw Materials') {
+      const purchase = rmPurchaseRecords.find(record => record.id === input.sourceId);
+      if (purchase?.materialId && materials.some(material => material.id === purchase.materialId)) return purchase.materialId;
+    }
+
+    if (input.sourceType === 'Sachets') {
+      const purchase = sachetPurchaseRecords.find(record => record.id === input.sourceId);
+      if (purchase?.materialId && materials.some(material => material.id === purchase.materialId)) return purchase.materialId;
+    }
+
+    if (input.sourceType === 'Boxes') {
+      const purchase = boxPurchaseRecords.find(record => record.id === input.sourceId);
+      const materialId = input.lineType === 'Assorted' ? purchase?.assortedMaterialId : purchase?.flavouredMaterialId;
+      if (materialId && materials.some(material => material.id === materialId)) return materialId;
+    }
+
+    const normalizedName = input.materialName?.toLowerCase().trim();
+    if (normalizedName) {
+      const directMatched = materials.find(material => {
+        const materialName = material.name.toLowerCase().trim();
+        return normalizedName === materialName || normalizedName.includes(materialName) || materialName.includes(normalizedName);
+      });
+      if (directMatched) return directMatched.id;
+
+      const candidates = materials
+        .map(material => ({ material, score: getTokenScore(normalizedName, material.name) }))
+        .filter(candidate => candidate.score > 0)
+        .sort((left, right) => right.score - left.score);
+      const matched = candidates[0]?.material;
+      if (matched) return matched.id;
+    }
+
+    return input.materialId || input.sourceId || '';
+  }, [boxPurchaseRecords, materials, rmPurchaseRecords, sachetPurchaseRecords]);
+
+  const getResolvedGoodsReceiptMaterialId = useCallback((record: GoodsReceiptRecord) => resolveInventoryMaterialId({
+    sourceType: record.sourceType,
+    sourceId: record.sourceId,
+    lineType: record.lineType,
+    materialId: record.inventoryMaterialId,
+    materialName: record.materialName,
+  }), [resolveInventoryMaterialId]);
+
+  const getResolvedTestSlipMaterialId = useCallback((slip: MaterialTestSlip) => {
+    const receipt = goodsReceiptRecords.find(record => record.id === slip.goodsReceiptId);
+    return resolveInventoryMaterialId({
+      sourceType: slip.sourceType,
+      sourceId: slip.sourceId,
+      lineType: slip.lineType,
+      materialId: receipt?.inventoryMaterialId || slip.materialId,
+      materialName: receipt?.materialName || slip.materialName,
+    });
+  }, [goodsReceiptRecords, resolveInventoryMaterialId]);
+
+  useEffect(() => {
+    setGoodsReceiptRecords(prev => {
+      const next = prev.map(record => {
+        const materialId = getResolvedGoodsReceiptMaterialId(record);
+        return materialId && materialId !== record.inventoryMaterialId
+          ? { ...record, inventoryMaterialId: materialId, remainingQuantity: record.remainingQuantity ?? record.availableQuantity }
+          : record;
+      });
+      return next.some((record, index) => record !== prev[index]) ? next : prev;
+    });
+
+    setMaterialTestSlips(prev => {
+      const next = prev.map(slip => {
+        const materialId = getResolvedTestSlipMaterialId(slip);
+        return materialId && materialId !== slip.materialId
+          ? { ...slip, materialId, remainingQuantity: slip.remainingQuantity ?? slip.availableQuantity }
+          : slip;
+      });
+      return next.some((slip, index) => slip !== prev[index]) ? next : prev;
+    });
+  }, [getResolvedGoodsReceiptMaterialId, getResolvedTestSlipMaterialId, goodsReceiptRecords, materialTestSlips]);
+
+  const removeProductLinkedData = (productIds: string[]) => {
+    const productIdSet = new Set(productIds);
+    const flavourIdSet = new Set(flavours.filter(flavour => productIdSet.has(flavour.productId)).map(flavour => flavour.id));
+    const recipeIdSet = new Set(recipes.filter(recipe => productIdSet.has(recipe.productId) || flavourIdSet.has(recipe.flavourId)).map(recipe => recipe.id));
+
+    setFlavours(prev => prev.filter(flavour => !productIdSet.has(flavour.productId)));
+    setRecipes(prev => prev.filter(recipe => !productIdSet.has(recipe.productId) && !flavourIdSet.has(recipe.flavourId)));
+    setProductionPlans(prev => prev.filter(plan =>
+      !productIdSet.has(plan.productId) &&
+      !flavourIdSet.has(plan.flavourId) &&
+      !recipeIdSet.has(plan.recipeId)
+    ));
+    setProductionCalculations(prev => prev.filter(calculation =>
+      !productIdSet.has(calculation.productId) &&
+      !flavourIdSet.has(calculation.flavourId) &&
+      !recipeIdSet.has(calculation.recipeId)
+    ));
+    setRequirementReportSelection(prev => ({
+      selectedRecipeIds: prev.selectedRecipeIds.filter(recipeId => !recipeIdSet.has(recipeId)),
+      productionQtyByRecipe: Object.fromEntries(
+        Object.entries(prev.productionQtyByRecipe).filter(([recipeId]) => !recipeIdSet.has(recipeId))
+      ),
+    }));
+    setAssortedBoxCalculations(prev => prev.filter(calculation => !productIdSet.has(calculation.productId)));
+  };
+
+  const filterUnchanged = <T,>(items: T[], predicate: (item: T) => boolean) => {
+    const filtered = items.filter(predicate);
+    return filtered.length === items.length ? items : filtered;
+  };
+
+  const updateCategory = (updated: Category) => setCategories(prev => prev.map(category => category.id === updated.id ? updated : category));
+  const removeCategory = (id: string) => {
+    const productIds = products.filter(product => product.categoryId === id).map(product => product.id);
+    setCategories(prev => prev.filter(category => category.id !== id));
+    setProducts(prev => prev.filter(product => product.categoryId !== id));
+    removeProductLinkedData(productIds);
+  };
+
+  const updateProduct = (updated: Product) => setProducts(prev => prev.map(product => product.id === updated.id ? updated : product));
+  const removeProduct = (id: string) => {
+    setProducts(prev => prev.filter(product => product.id !== id));
+    removeProductLinkedData([id]);
+  };
+
+  useEffect(() => {
+    const validCategoryIds = new Set(categories.map(category => category.id));
+    const validProductIds = new Set(products.filter(product => validCategoryIds.has(product.categoryId)).map(product => product.id));
+    const validFlavourIds = new Set(flavours.filter(flavour => validProductIds.has(flavour.productId)).map(flavour => flavour.id));
+    const validRecipeIds = new Set(recipes.filter(recipe => validProductIds.has(recipe.productId) && validFlavourIds.has(recipe.flavourId)).map(recipe => recipe.id));
+
+    setProducts(prev => filterUnchanged(prev, product => validCategoryIds.has(product.categoryId)));
+    setFlavours(prev => filterUnchanged(prev, flavour => validProductIds.has(flavour.productId)));
+    setRecipes(prev => filterUnchanged(prev, recipe => validProductIds.has(recipe.productId) && validFlavourIds.has(recipe.flavourId)));
+    setProductionPlans(prev => filterUnchanged(prev, plan =>
+      validProductIds.has(plan.productId) &&
+      validFlavourIds.has(plan.flavourId) &&
+      validRecipeIds.has(plan.recipeId)
+    ));
+    setProductionCalculations(prev => filterUnchanged(prev, calculation =>
+      validProductIds.has(calculation.productId) &&
+      validFlavourIds.has(calculation.flavourId) &&
+      validRecipeIds.has(calculation.recipeId)
+    ));
+    setRequirementReportSelection(prev => {
+      const selectedRecipeIds = prev.selectedRecipeIds.filter(recipeId => validRecipeIds.has(recipeId));
+      const productionQtyByRecipe = Object.fromEntries(
+        Object.entries(prev.productionQtyByRecipe).filter(([recipeId]) => validRecipeIds.has(recipeId))
+      );
+
+      if (
+        selectedRecipeIds.length === prev.selectedRecipeIds.length &&
+        Object.keys(productionQtyByRecipe).length === Object.keys(prev.productionQtyByRecipe).length
+      ) {
+        return prev;
+      }
+
+      return { selectedRecipeIds, productionQtyByRecipe };
+    });
+    setAssortedBoxCalculations(prev => filterUnchanged(prev, calculation => validProductIds.has(calculation.productId)));
+  }, [categories, products, flavours, recipes]);
+
   const removeManufacturer = (id: string) => {
     const isUsedByProduct = products.some(product => product.manufacturerId === id);
     const isUsedByProductionPlan = productionPlans.some(plan => plan.manufacturerId === id);
@@ -890,16 +741,6 @@ export const ErpProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const updateFlavour = (updated: Flavour) => setFlavours(prev => prev.map(f => f.id === updated.id ? updated : f));
   const removeFlavour = (id: string) => {
-    const isUsedByRecipe = recipes.some(recipe => recipe.flavourId === id);
-    const isUsedByProductionPlan = productionPlans.some(plan => plan.flavourId === id);
-    const isUsedByAssortedBox = recipes.some(recipe => {
-      const boxConfig = normalizeRecipeBoxConfig(recipe.boxConfig, recipe.flavourId);
-      return boxConfig.assortedBox.allowedFlavourIds.includes(id) || Object.prototype.hasOwnProperty.call(boxConfig.assortedBox.composition, id);
-    });
-    if (isUsedByRecipe || isUsedByProductionPlan || isUsedByAssortedBox) {
-      notifyDeleteBlocked('Cannot delete flavour because it is referenced by recipes, assorted boxes, or production records.');
-      return;
-    }
     setFlavours(prev => prev.filter(f => f.id !== id));
   };
 
@@ -986,7 +827,7 @@ export const ErpProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }]);
   };
 
-  const updateRecipe = (updated: Recipe) => setRecipes(prev => prev.map(r => r.id === updated.id ? updated : r));
+  const updateRecipe = (updated: Recipe) => setRecipes(prev => prev.map(r => r.id === updated.id ? normalizeRecipeMaterialUnits(updated) : r));
   const removeRecipe = (id: string) => {
     const isUsedByProductionPlan = productionPlans.some(plan => plan.recipeId === id);
     if (isUsedByProductionPlan) {
@@ -1044,8 +885,16 @@ export const ErpProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const saveGoodsReceipt = (input: SaveGoodsReceiptInput) => {
     const key = getGoodsReceiptKey(input.sourceType, input.sourceId, input.lineType);
     const goodsReceiptId = `${input.sourceType}-${input.sourceId}-${Date.now()}`;
-    const inventoryMaterialId = input.inventoryMaterialId || input.sourceId;
+    const inventoryMaterialId = resolveInventoryMaterialId({
+      sourceType: input.sourceType,
+      sourceId: input.sourceId,
+      lineType: input.lineType,
+      materialId: input.inventoryMaterialId,
+      materialName: input.materialName,
+    });
     const quantities = getCalculatedGoodsReceiptQuantities(input.receivedQuantity, input.qaSampleQuantity);
+    const rmPurchase = input.sourceType === 'Raw Materials' ? rmPurchaseRecords.find(record => record.id === input.sourceId) : undefined;
+    const expiryDate = rmPurchase?.expiryDate || '';
 
     setGoodsReceiptRecords(prev => {
       const existingReceivedQuantity = prev
@@ -1062,13 +911,15 @@ export const ErpProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           lineType: input.lineType,
           materialType: input.materialType,
           materialName: input.materialName,
-          inventoryMaterialId: input.inventoryMaterialId,
+          inventoryMaterialId,
           purchaseQuantity: input.purchaseQuantity,
           unit: input.unit,
           purchaseDate: input.purchaseDate,
           receivedQuantity: quantities.receivedQuantity,
           qaSampleQuantity: quantities.qaSampleQuantity,
           availableQuantity: quantities.availableQuantity,
+          remainingQuantity: quantities.availableQuantity,
+          expiryDate,
           receivedDate: input.receivedDate,
           receivedBy: input.receivedBy,
           remarks: input.remarks,
@@ -1130,6 +981,8 @@ export const ErpProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         receivedQuantity: quantities.receivedQuantity,
         qaSampleQuantity: quantities.qaSampleQuantity,
         availableQuantity: quantities.availableQuantity,
+        remainingQuantity: quantities.availableQuantity,
+        expiryDate,
         unit: input.unit,
         receivedDate: input.receivedDate,
         receivedBy: input.receivedBy,
@@ -1137,9 +990,9 @@ export const ErpProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       },
     ]);
 
-    if (input.inventoryMaterialId) {
+    if (inventoryMaterialId) {
       setMaterials(prev => prev.map(material => (
-        material.id === input.inventoryMaterialId
+        material.id === inventoryMaterialId
           ? { ...material, stock: (material.stock ?? 0) + quantities.availableQuantity, lastUpdated: input.receivedDate, qaStatus: MATERIAL_QA_STATUS.UNDER_TESTING }
           : material
       )));
@@ -1147,13 +1000,22 @@ export const ErpProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const saveMaterialTestDecision = (input: SaveMaterialTestDecisionInput) => {
+    const testSlip = materialTestSlips.find(slip => slip.id === input.testSlipId);
+    const materialId = testSlip ? getResolvedTestSlipMaterialId(testSlip) : '';
     setMaterialTestSlips(prev => prev.map(slip => slip.id === input.testSlipId
-      ? { ...slip, qaRemarks: input.qaRemarks, status: input.decision }
+      ? { ...slip, materialId, qaRemarks: input.qaRemarks, status: input.decision }
       : slip
     ));
-    const testSlip = materialTestSlips.find(slip => slip.id === input.testSlipId);
     if (testSlip) {
-      setMaterials(prev => prev.map(material => material.id === testSlip.materialId
+      setGoodsReceiptRecords(prev => prev.map(record => record.id === testSlip.goodsReceiptId
+        ? { ...record, inventoryMaterialId: materialId, remainingQuantity: testSlip.remainingQuantity ?? record.remainingQuantity ?? record.availableQuantity }
+        : record
+      ));
+      setInventoryTransactions(prev => prev.map(transaction => transaction.referenceId === testSlip.sourceId && transaction.materialName === testSlip.materialName
+        ? { ...transaction, materialId }
+        : transaction
+      ));
+      setMaterials(prev => prev.map(material => material.id === materialId
         ? { ...material, qaStatus: input.decision }
         : material
       ));
@@ -1162,20 +1024,58 @@ export const ErpProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const saveProductionIssue = (input: SaveProductionIssueInput) => {
     const currentMaterial = materials.find(material => material.id === input.materialId);
-    if (currentMaterial?.qaStatus !== MATERIAL_QA_STATUS.TEST_APPROVED) {
+    const approvedSlips = materialTestSlips.filter(slip => getResolvedTestSlipMaterialId(slip) === input.materialId && slip.status === MATERIAL_QA_STATUS.TEST_APPROVED);
+    const approvedSlipIds = new Set(approvedSlips.map(slip => slip.goodsReceiptId));
+    const fifoBatches = goodsReceiptRecords
+      .filter(record => getResolvedGoodsReceiptMaterialId(record) === input.materialId && approvedSlipIds.has(record.id) && (record.remainingQuantity ?? record.availableQuantity) > 0)
+      .sort((left, right) => {
+        const leftExpiry = left.expiryDate || '9999-12-31';
+        const rightExpiry = right.expiryDate || '9999-12-31';
+        if (leftExpiry !== rightExpiry) return leftExpiry.localeCompare(rightExpiry);
+        if (left.receivedDate !== right.receivedDate) return left.receivedDate.localeCompare(right.receivedDate);
+        return left.id.localeCompare(right.id);
+      });
+    const approvedAvailableQuantity = fifoBatches.reduce((sum, record) => sum + (record.remainingQuantity ?? record.availableQuantity), 0);
+
+    if (approvedAvailableQuantity <= 0) {
       window.alert('This material is currently under testing or has been rejected.');
       return;
     }
-    if (input.issuedQuantity > input.availableQuantity) {
+    if (input.issuedQuantity > approvedAvailableQuantity) {
       window.alert('Cannot issue more than the available stock.');
       return;
     }
-    const remainingQuantity = input.availableQuantity - input.issuedQuantity;
-    if (remainingQuantity < 0) {
+    const approvedRemainingQuantity = approvedAvailableQuantity - input.issuedQuantity;
+    const totalRemainingQuantity = Math.max(0, (currentMaterial?.stock ?? approvedAvailableQuantity) - input.issuedQuantity);
+    if (approvedRemainingQuantity < 0) {
       window.alert('Issuing this quantity would create negative stock.');
       return;
     }
     const referenceId = getInventoryTransactionId('issue', input.materialId);
+    let quantityToIssue = input.issuedQuantity;
+    const usedBatchIds: string[] = [];
+    const nextReceiptRemaining = new Map<string, number>();
+
+    fifoBatches.forEach(record => {
+      if (quantityToIssue <= 0) return;
+      const currentRemaining = record.remainingQuantity ?? record.availableQuantity;
+      const consumed = Math.min(currentRemaining, quantityToIssue);
+      quantityToIssue -= consumed;
+      nextReceiptRemaining.set(record.id, Number((currentRemaining - consumed).toFixed(6)));
+      usedBatchIds.push(record.id);
+    });
+
+    setGoodsReceiptRecords(prev => prev.map(record => (
+      nextReceiptRemaining.has(record.id)
+        ? { ...record, remainingQuantity: nextReceiptRemaining.get(record.id) }
+        : record
+    )));
+    setMaterialTestSlips(prev => prev.map(slip => (
+      nextReceiptRemaining.has(slip.goodsReceiptId)
+        ? { ...slip, remainingQuantity: nextReceiptRemaining.get(slip.goodsReceiptId) }
+        : slip
+    )));
+
     setProductionIssueRecords(prev => [
       ...prev,
       {
@@ -1187,22 +1087,23 @@ export const ErpProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         issuedQuantity: input.issuedQuantity,
         unit: input.unit,
         batchNumber: input.batchNumber,
+        fifoBatches: usedBatchIds.join(', '),
         issueDate: input.issueDate,
         issuedBy: input.issuedBy,
         remarks: input.remarks,
-        remainingQuantity,
+        remainingQuantity: totalRemainingQuantity,
         status: 'Issued',
       },
     ]);
 
     setMaterials(prev => prev.map(material => (
       material.id === input.materialId
-        ? { ...material, stock: remainingQuantity, lastUpdated: input.issueDate }
+        ? { ...material, stock: totalRemainingQuantity, lastUpdated: input.issueDate }
         : material
     )));
 
-    if (currentMaterial && typeof currentMaterial.minStock === 'number' && remainingQuantity <= currentMaterial.minStock) {
-      window.alert(`Low stock alert: ${currentMaterial.name} will be at ${remainingQuantity} ${currentMaterial.unit}, which is at or below the minimum stock level of ${currentMaterial.minStock} ${currentMaterial.unit}.`);
+    if (currentMaterial && typeof currentMaterial.minStock === 'number' && totalRemainingQuantity <= currentMaterial.minStock) {
+      window.alert(`Low stock alert: ${currentMaterial.name} will be at ${totalRemainingQuantity} ${currentMaterial.unit}, which is at or below the minimum stock level of ${currentMaterial.minStock} ${currentMaterial.unit}.`);
     }
 
       setInventoryTransactions(prev => [
@@ -1295,7 +1196,11 @@ export const ErpProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     <ErpContext.Provider value={{
       categories, products, flavours, manufacturers, materials, vendors, vendorHistoryRecords, recipes, productionPlans, productionCalculations, requirementReportSelection, assortedBoxCalculations, rmPurchaseRecords, sachetPurchaseRecords, boxPurchaseRecords, goodsReceiptRecords, productionIssueRecords, productionReturnRecords, inventoryTransactions, materialTestSlips,
       addCategory: (c) => setCategories(prev => [...prev, c]),
+      updateCategory,
+      removeCategory,
       addProduct: (p) => setProducts(prev => [...prev, p]),
+      updateProduct,
+      removeProduct,
       addFlavour: (f) => setFlavours(prev => [...prev, f]),
       updateFlavour,
       removeFlavour,
@@ -1308,10 +1213,13 @@ export const ErpProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       addVendor,
       updateVendor,
       removeVendor,
-      addRecipe: (r) => setRecipes(prev => [...prev, r]),
+      addRecipe: (r) => setRecipes(prev => [...prev, normalizeRecipeMaterialUnits(r)]),
       updateRecipe, 
       removeRecipe,
-      addProductionPlan: (p) => setProductionPlans(prev => [...prev, p]),
+      addProductionPlan: (p) => setProductionPlans(prev => prev.some(plan => plan.id === p.id)
+        ? prev.map(plan => plan.id === p.id ? p : plan)
+        : [...prev, p]
+      ),
       upsertProductionCalculation,
       updateRequirementReportSelection: setRequirementReportSelection,
       upsertAssortedBoxCalculation,

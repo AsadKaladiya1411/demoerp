@@ -22,7 +22,7 @@ export function RecipeManagement() {
   const [selectedRecipeId, setSelectedRecipeId] = useState('');
   const [editingRecipeId, setEditingRecipeId] = useState('');
   const [version, setVersion] = useState('v1');
-  const [materialsRows, setMaterialsRows] = useState<MaterialRow[]>([{ materialId: '', quantity: '', unit: '%', make: '' }]);
+  const [materialsRows, setMaterialsRows] = useState<MaterialRow[]>([{ materialId: '', quantity: '', unit: 'kg', make: '' }]);
   const [packagingRows, setPackagingRows] = useState<PackagingRow[]>([]);
   const [productionQty, setProductionQty] = useState('300');
   const [servingSize, setServingSize] = useState('30');
@@ -84,7 +84,7 @@ export function RecipeManagement() {
     setAssortedSachetsPerBox('20');
     setAllowedAssortedFlavourIds(selectedFlavour ? [selectedFlavour] : []);
     setAssortedCompositionRows(selectedFlavour ? [{ flavourId: selectedFlavour, sachetsPerBox: '20' }] : []);
-    setMaterialsRows([{ materialId: '', quantity: '', unit: '%', make: '' }]);
+    setMaterialsRows([{ materialId: '', quantity: '', unit: 'kg', make: '' }]);
     setPackagingRows([]);
     setStatusMessage('');
   };
@@ -109,7 +109,7 @@ export function RecipeManagement() {
       flavourId,
       sachetsPerBox: String(sachetsPerBox),
     })));
-    setMaterialsRows(recipe.materials.map(material => ({ materialId: material.materialId, quantity: String(material.quantity), unit: material.unit || '%', make: material.make || '' })));
+    setMaterialsRows(recipe.materials.map(material => ({ materialId: material.materialId, quantity: String(material.quantity), unit: material.unit || 'kg', make: material.make || '' })));
     setPackagingRows((recipe.packaging || []).map(pack => ({
       materialId: pack.materialId,
       unit: pack.unit || 'Nos',
@@ -189,7 +189,7 @@ export function RecipeManagement() {
       batchSize: Number(batchSize),
       packSize: packSize.trim(),
       servingSize: servingSize ? `${servingSize}g` : undefined,
-      materials: materialsRows.map(row => ({ materialId: row.materialId, quantity: Number(row.quantity) || 0, unit: row.unit || '%', make: row.make.trim() || undefined })),
+      materials: materialsRows.map(row => ({ materialId: row.materialId, quantity: Number(row.quantity) || 0, unit: row.unit || 'kg', make: row.make.trim() || undefined })),
       packaging: packagingPayload,
       boxConfig: {
         defaultAssortedPercentage: Number(assortedPercentage),
@@ -447,7 +447,7 @@ export function RecipeManagement() {
                 <h4 className="text-lg font-semibold">Recipe Formula Chart</h4>
                 <p className="text-sm text-muted-foreground">This table is the fixed 100g master formula.</p>
               </div>
-              <Button variant="outline" size="sm" onClick={() => setMaterialsRows(prev => [...prev, { materialId: '', quantity: '', unit: '%', make: '' }])}>Add Material</Button>
+              <Button variant="outline" size="sm" onClick={() => setMaterialsRows(prev => [...prev, { materialId: '', quantity: '', unit: 'kg', make: '' }])}>Add Material</Button>
             </div>
 
             <Table>
@@ -462,16 +462,11 @@ export function RecipeManagement() {
               </TableHeader>
               <TableBody>
                 {materialsRows.map((row, index) => {
-                  const selectedMaterial = materials.find(material => material.id === row.materialId);
+                  const hasIngredientMaterial = row.materialId.trim().length > 0;
                   return (
-                    <TableRow key={`${row.materialId || 'row'}-${index}`}>
+                    <TableRow key={`ingredient-row-${index}`}>
                       <TableCell className="min-w-56">
-                        <Select value={row.materialId} onValueChange={(value) => setMaterialsRows(prev => prev.map((currentRow, currentIndex) => currentIndex === index ? { ...currentRow, materialId: value, unit: '%' } : currentRow))}>
-                          <SelectTrigger><SelectValue placeholder="Select Material" /></SelectTrigger>
-                          <SelectContent>
-                            {materials.filter(material => material.type === 'Raw Material').map(material => <SelectItem key={material.id} value={material.id}>{material.name}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
+                        <Input value={row.materialId} onChange={(event) => setMaterialsRows(prev => prev.map((currentRow, currentIndex) => currentIndex === index ? { ...currentRow, materialId: event.target.value, unit: 'kg' } : currentRow))} placeholder="Enter material name" />
                       </TableCell>
                       <TableCell>
                         <Input type="number" value={row.quantity} onChange={(event) => setMaterialsRows(prev => prev.map((currentRow, currentIndex) => currentIndex === index ? { ...currentRow, quantity: event.target.value } : currentRow))} />
@@ -479,7 +474,7 @@ export function RecipeManagement() {
                       <TableCell>
                         <Input value={row.make} onChange={(event) => setMaterialsRows(prev => prev.map((currentRow, currentIndex) => currentIndex === index ? { ...currentRow, make: event.target.value } : currentRow))} placeholder="e.g. KP Manish" />
                       </TableCell>
-                      <TableCell>{selectedMaterial?.name ? `${(((Number(row.quantity) || 0) / 100) * (Number(servingSize) || 0)).toFixed(3)} g` : '-'}</TableCell>
+                      <TableCell>{hasIngredientMaterial ? `${(((Number(row.quantity) || 0) / 100) * (Number(servingSize) || 0)).toFixed(3)} g` : '-'}</TableCell>
                       <TableCell>
                         <Button variant="ghost" size="sm" onClick={() => setMaterialsRows(prev => prev.filter((_, currentIndex) => currentIndex !== index))}>Remove</Button>
                       </TableCell>
@@ -519,14 +514,9 @@ export function RecipeManagement() {
                 </TableHeader>
                 <TableBody>
                   {packagingRows.map((row, index) => (
-                    <TableRow key={`${row.materialId || 'pack'}-${index}`}>
+                    <TableRow key={`packaging-row-${index}`}>
                       <TableCell className="min-w-56">
-                        <Select value={row.materialId} onValueChange={(value) => setPackagingRows(prev => prev.map((currentRow, currentIndex) => currentIndex === index ? { ...currentRow, materialId: value } : currentRow))}>
-                          <SelectTrigger><SelectValue placeholder="Select Packaging Material" /></SelectTrigger>
-                          <SelectContent>
-                            {materials.filter(material => material.type === 'Packaging Material' && !material.name.toLowerCase().includes('box')).map(material => <SelectItem key={material.id} value={material.id}>{material.name}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
+                        <Input value={row.materialId} onChange={(event) => setPackagingRows(prev => prev.map((currentRow, currentIndex) => currentIndex === index ? { ...currentRow, materialId: event.target.value } : currentRow))} placeholder="Enter packaging material" />
                       </TableCell>
                       <TableCell>
                         <Select value={row.unit} onValueChange={(value) => setPackagingRows(prev => prev.map((currentRow, currentIndex) => currentIndex === index ? { ...currentRow, unit: value as 'Nos' | 'Roll' } : currentRow))}>
@@ -867,4 +857,3 @@ export function RecipeManagement() {
 }
 
 export default RecipeManagement;
-

@@ -23,7 +23,7 @@ function isSachetMaterialName(name: string) {
 export function FlavourDetails() {
   const { productId, flavourId } = useParams();
   const navigate = useNavigate();
-  const { products, flavours, recipes, materials, productionCalculations, addRecipe, updateRecipe, upsertProductionCalculation } = useErpData();
+  const { products, flavours, recipes, materials, productionCalculations, addRecipe, updateRecipe, addProductionPlan, upsertProductionCalculation } = useErpData();
 
   const product = products.find(p => p.id === productId);
   const flavour = flavours.find(f => f.id === flavourId && f.productId === productId);
@@ -64,7 +64,7 @@ export function FlavourDetails() {
     setIngredients(selectedRecipe.materials.map(row => ({
       materialId: row.materialId,
       quantity: String(row.quantity),
-      unit: row.unit || '%',
+      unit: row.unit || 'kg',
       make: row.make || '',
     })));
     setPackagingRows((selectedRecipe.packaging || []).map(row => ({
@@ -232,7 +232,7 @@ export function FlavourDetails() {
       materials: ingredients.map(row => ({
         materialId: row.materialId,
         quantity: Number(row.quantity) || 0,
-        unit: row.unit || '%',
+        unit: row.unit || 'kg',
         make: row.make.trim() || undefined,
       })),
       packaging: packagingPayload,
@@ -274,6 +274,43 @@ export function FlavourDetails() {
       flavouredBoxes,
     });
     setProductionStatus('Production calculation saved for product box planning.');
+  };
+
+  const generateReport = () => {
+    if (!product || !flavour || !selectedRecipe || !productionSummary) return;
+    if (productionQuantityKg <= 0) {
+      setProductionStatus('Production Quantity must be greater than 0.');
+      return;
+    }
+
+    upsertProductionCalculation({
+      recipeId: selectedRecipe.id,
+      productId: product.id,
+      flavourId: flavour.id,
+      productionKg: productionQuantityKg,
+      finishedSachets,
+      flavouredRatio: flavouredRatioValue,
+      assortedRatio: Number(100 - flavouredRatioValue),
+      flavouredSachets,
+      assortedSachets,
+      sachetsPerFlavouredBox: flavouredBoxCapacityValue,
+      flavouredBoxes,
+    });
+
+    addProductionPlan({
+      id: `report-${selectedRecipe.id}`,
+      productId: product.id,
+      flavourId: flavour.id,
+      recipeId: selectedRecipe.id,
+      manufacturerId: product.manufacturerId || '',
+      batch: `REPORT-${selectedRecipe.version}`,
+      mfgDate: new Date().toISOString().slice(0, 10),
+      quantity: productionQuantityKg,
+      type: 'Normal',
+      status: 'Approved',
+    });
+
+    setProductionStatus('Final report generated and added to Requirement Report.');
   };
 
   if (!product || !flavour) {
@@ -343,14 +380,9 @@ export function FlavourDetails() {
             </TableHeader>
             <TableBody>
               {ingredients.map((row, index) => (
-                <TableRow key={`${row.materialId || 'ingredient'}-${index}`}>
+                <TableRow key={`ingredient-row-${index}`}>
                   <TableCell>
-                    <Select value={row.materialId} onValueChange={value => setIngredients(prev => prev.map((item, currentIndex) => currentIndex === index ? { ...item, materialId: value, unit: '%' } : item))}>
-                      <SelectTrigger><SelectValue placeholder="Select Material" /></SelectTrigger>
-                      <SelectContent>
-                        {materials.filter(item => item.type === 'Raw Material').map(item => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <Input value={row.materialId} onChange={event => setIngredients(prev => prev.map((item, currentIndex) => currentIndex === index ? { ...item, materialId: event.target.value, unit: 'kg' } : item))} placeholder="Enter material name" />
                   </TableCell>
                   <TableCell>
                     <Input type="number" value={row.quantity} onChange={event => setIngredients(prev => prev.map((item, currentIndex) => currentIndex === index ? { ...item, quantity: event.target.value } : item))} />
@@ -379,7 +411,7 @@ export function FlavourDetails() {
             </TableBody>
           </Table>
           <div className="mt-4">
-            <Button variant="outline" size="sm" onClick={() => setIngredients(prev => [...prev, { materialId: '', quantity: '', unit: '%', make: '' }])}>Add Ingredient</Button>
+            <Button variant="outline" size="sm" onClick={() => setIngredients(prev => [...prev, { materialId: '', quantity: '', unit: 'kg', make: '' }])}>Add Ingredient</Button>
           </div>
         </CardContent>
       </Card>
@@ -404,14 +436,9 @@ export function FlavourDetails() {
             </TableHeader>
             <TableBody>
               {packagingRows.map((row, index) => (
-                <TableRow key={`${row.materialId || 'packaging'}-${index}`}>
+                <TableRow key={`packaging-row-${index}`}>
                   <TableCell>
-                    <Select value={row.materialId} onValueChange={value => updatePackagingMaterial(index, value)}>
-                      <SelectTrigger><SelectValue placeholder="Select Packaging Material" /></SelectTrigger>
-                      <SelectContent>
-                        {materials.filter(item => item.type === 'Packaging Material' && !item.name.toLowerCase().includes('box')).map(item => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <Input value={row.materialId} onChange={event => updatePackagingMaterial(index, event.target.value)} placeholder="Enter packaging material" />
                   </TableCell>
                   <TableCell>
                     <Select value={row.unit} onValueChange={value => updatePackagingUnit(index, value as 'Nos' | 'Roll')}>
@@ -615,7 +642,7 @@ export function FlavourDetails() {
             </Table>
           </div>
           <div className="flex gap-2">
-            <Button disabled={!productionSummary}><FileText className="mr-2 h-4 w-4" /> Generate Report</Button>
+            <Button onClick={generateReport} disabled={!productionSummary}><FileText className="mr-2 h-4 w-4" /> Generate Report</Button>
             <Button variant="outline" disabled={!productionSummary}><Printer className="mr-2 h-4 w-4" /> Print</Button>
           </div>
         </CardContent>

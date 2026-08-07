@@ -12,11 +12,12 @@ import { motion } from 'framer-motion';
 import { Search, Plus } from 'lucide-react';
 
 export function Categories() {
-  const { categories, addCategory } = useErpData();
+  const { categories, addCategory, updateCategory, removeCategory } = useErpData();
   const [search, setSearch] = useState('');
   
   // Form State
   const [open, setOpen] = useState(false);
+  const [editingId, setEditingId] = useState('');
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -25,32 +26,54 @@ export function Categories() {
 
   const filtered = categories.filter(c => c.name.toLowerCase().includes(search.toLowerCase()) || c.code.toLowerCase().includes(search.toLowerCase()));
 
+  const resetForm = () => {
+    setEditingId('');
+    setCode('');
+    setName('');
+    setDescription('');
+    setStatus('Active');
+    setError('');
+  };
+
+  const openAddDialog = () => {
+    resetForm();
+    setOpen(true);
+  };
+
+  const openEditDialog = (category: typeof categories[number]) => {
+    setEditingId(category.id);
+    setCode(category.code);
+    setName(category.name);
+    setDescription(category.description);
+    setStatus(category.status);
+    setError('');
+    setOpen(true);
+  };
+
   const handleSave = () => {
     if (!name.trim()) {
       setError('Category Name is required.');
       return;
     }
     
-    if (categories.some(c => c.name.toLowerCase() === name.toLowerCase())) {
+    if (categories.some(c => c.id !== editingId && c.name.toLowerCase() === name.toLowerCase())) {
       setError('A Category with this name already exists.');
       return;
     }
-    
-    addCategory({
-      id: Math.random().toString(),
+
+    const payload = {
+      id: editingId || Math.random().toString(),
       code: code || `CAT-${Math.floor(Math.random() * 1000)}`,
       name,
       description,
       status,
-      createdDate: new Date().toISOString().split('T')[0]
-    });
+      createdDate: editingId ? categories.find(category => category.id === editingId)?.createdDate || new Date().toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
+    };
+
+    if (editingId) updateCategory(payload);
+    else addCategory(payload);
     
-    // Reset and close
-    setCode('');
-    setName('');
-    setDescription('');
-    setStatus('Active');
-    setError('');
+    resetForm();
     setOpen(false);
   };
 
@@ -59,15 +82,15 @@ export function Categories() {
       <div className="flex items-center justify-between">
         <h2 className="text-3xl font-bold tracking-tight text-primary">Product Categories</h2>
         
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={(nextOpen) => { setOpen(nextOpen); if (!nextOpen) resetForm(); }}>
           <DialogTrigger asChild>
-            <Button>
+            <Button onClick={openAddDialog}>
               <Plus className="mr-2 h-4 w-4" /> Add Category
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Add New Category</DialogTitle>
+              <DialogTitle>{editingId ? 'Edit Category' : 'Add New Category'}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-4">
               {error && <div className="text-sm text-destructive font-medium">{error}</div>}
@@ -147,8 +170,8 @@ export function Categories() {
                     <Badge variant={cat.status === 'Active' ? 'default' : 'secondary'}>{cat.status}</Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="sm">Edit</Button>
-                    <Button variant="ghost" size="sm" className="text-destructive">Delete</Button>
+                    <Button variant="ghost" size="sm" onClick={() => openEditDialog(cat)}>Edit</Button>
+                    <Button variant="ghost" size="sm" className="text-destructive" onClick={() => removeCategory(cat.id)}>Delete</Button>
                   </TableCell>
                 </TableRow>
               ))}

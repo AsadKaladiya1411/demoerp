@@ -46,7 +46,7 @@ const detectMaterialType = (materialCode: string, materialName: string): Product
 export function ProductionIssue() {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
-  const { materials, productionIssueRecords, saveProductionIssue } = useErpData();
+  const { materials, goodsReceiptRecords, materialTestSlips, productionIssueRecords, saveProductionIssue } = useErpData();
   const params = useParams<{ materialId?: string }>();
 
   const [issuedQuantity, setIssuedQuantity] = useState('');
@@ -56,20 +56,62 @@ export function ProductionIssue() {
   const [remarks, setRemarks] = useState('');
   const [message, setMessage] = useState('');
 
-  const availableInventory = useMemo<InventoryViewRow[]>(() => (
-    materials
-      .map(material => ({
-        materialId: material.id,
-        materialType: detectMaterialType(material.code, material.name),
-        materialName: material.name,
-        availableQuantity: material.stock ?? 0,
-        unit: material.unit,
-        lastUpdated: material.lastUpdated || '-',
-        qaStatus: material.qaStatus,
-      }))
-      .filter(row => row.availableQuantity > 0)
-      .sort((left, right) => left.materialName.localeCompare(right.materialName))
-  ), [materials]);
+  const availableInventory = useMemo<InventoryViewRow[]>(() => {
+    const getNameTokens = (value?: string) => new Set((value || '').toLowerCase().match(/[a-z0-9]+/g) || []);
+    const getTokenScore = (left?: string, right?: string) => {
+      const leftTokens = getNameTokens(left);
+      const rightTokens = getNameTokens(right);
+      return Array.from(leftTokens).filter(token => token.length > 2 && rightTokens.has(token)).length;
+    };
+    const resolveReceiptMaterialId = (record: typeof goodsReceiptRecords[number]) => {
+      if (record.inventoryMaterialId) return record.inventoryMaterialId;
+      const normalizedName = record.materialName.toLowerCase().trim();
+      const directMatch = materials.find(item => {
+        const materialName = item.name.toLowerCase().trim();
+        return normalizedName === materialName || normalizedName.includes(materialName) || materialName.includes(normalizedName);
+      });
+      if (directMatch) return directMatch.id;
+
+      return materials
+        .map(item => ({ item, score: getTokenScore(normalizedName, item.name) }))
+        .filter(candidate => candidate.score > 0)
+        .sort((left, right) => right.score - left.score)[0]?.item.id || record.sourceId;
+    };
+    const resolveSlipMaterialId = (slip: typeof materialTestSlips[number]) => {
+      const receipt = goodsReceiptRecords.find(record => record.id === slip.goodsReceiptId);
+      if (receipt) return resolveReceiptMaterialId(receipt);
+      return slip.materialId;
+    };
+    const rows = new Map<string, InventoryViewRow>();
+
+    materialTestSlips
+      .filter(slip => slip.status === MATERIAL_QA_STATUS.TEST_APPROVED)
+      .forEach(slip => {
+        const receipt = goodsReceiptRecords.find(record => record.id === slip.goodsReceiptId);
+        const materialId = resolveSlipMaterialId(slip);
+        const material = materials.find(item => item.id === materialId);
+        const remainingQuantity = receipt
+          ? (receipt.remainingQuantity ?? receipt.availableQuantity)
+          : (slip.remainingQuantity ?? slip.availableQuantity);
+
+        if (remainingQuantity <= 0) return;
+
+        const existing = rows.get(materialId);
+        rows.set(materialId, {
+          materialId,
+          materialType: detectMaterialType(material?.code || materialId, material?.name || receipt?.materialName || slip.materialName),
+          materialName: material?.name || receipt?.materialName || slip.materialName,
+          availableQuantity: (existing?.availableQuantity || 0) + remainingQuantity,
+          unit: material?.unit || receipt?.unit || slip.unit,
+          lastUpdated: [existing?.lastUpdated, receipt?.receivedDate || slip.receivedDate]
+            .filter(Boolean)
+            .sort((left, right) => String(right).localeCompare(String(left)))[0] || '-',
+          qaStatus: MATERIAL_QA_STATUS.TEST_APPROVED,
+        });
+      });
+
+    return Array.from(rows.values()).sort((left, right) => left.materialName.localeCompare(right.materialName));
+  }, [goodsReceiptRecords, materialTestSlips, materials]);
 
   const selectedMaterial = useMemo(() => availableInventory.find(row => row.materialId === params.materialId), [availableInventory, params.materialId]);
   const materialHistory = useMemo(() => (

@@ -61,7 +61,7 @@ export function ManageFlavours() {
   };
 
   const handleDelete = (idToDelete: string) => {
-    if (window.confirm('Delete this flavour? This cannot be undone.')) removeFlavour(idToDelete);
+    removeFlavour(idToDelete);
   };
 
   return (

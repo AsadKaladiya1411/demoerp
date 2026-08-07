@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,7 +12,7 @@ import { Download, Filter, Printer, Search, Eye } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useErpData, type InventoryTransactionRecord, type InventoryTransactionType } from '@/context/ErpContext';
 import { useAuth } from '@/context/AuthContext';
-import { calculatePackaging, calculateProduction, generateConsolidatedMaterialRequirementReport, getPackagingRequiredDisplay } from '@/lib/production';
+import { calculatePackaging, calculateProduction, getPackagingRequiredDisplay } from '@/lib/production';
 
 type ReportTabKey = 'goodsReceipt' | 'productionIssue' | 'productionReturn' | 'finishedGoods' | 'inventoryMovement';
 
@@ -49,6 +49,20 @@ type ReportConfig = {
   columns: ReportColumn[];
   showTransactionTypeFilter?: boolean;
 };
+
+type RequirementReportRow = {
+  materialName: string;
+  requiredQuantity: number;
+  unit: string;
+};
+
+const normalizeReportRecipeUnits = <T extends { materials: Array<{ unit: string }> }>(recipe: T): T => ({
+  ...recipe,
+  materials: recipe.materials.map(material => ({
+    ...material,
+    unit: material.unit === '%' ? 'kg' : material.unit || 'kg',
+  })),
+});
 
 type ReportFilters = {
   searchQuery: string;
@@ -559,105 +573,81 @@ function InventoryMovementView() {
 
 export function Reports() {
   const location = useLocation();
-  const { productionPlans, products, flavours, recipes, materials, productionCalculations, assortedBoxCalculations, requirementReportSelection, updateRequirementReportSelection } = useErpData();
+  const { productionPlans, products, flavours, recipes, materials, productionCalculations, assortedBoxCalculations } = useErpData();
   const { currentUser } = useAuth();
   const isInventoryMovementRoute = location.pathname.startsWith('/inventory-movement');
   const isEmployeeB = currentUser.role === 'Employee B';
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [selectedRecipeIds, setSelectedRecipeIds] = useState<string[]>(requirementReportSelection.selectedRecipeIds);
-  const [productionQtyByRecipe, setProductionQtyByRecipe] = useState<Record<string, string>>(requirementReportSelection.productionQtyByRecipe);
+  const requirementReportRows = useMemo<RequirementReportRow[]>(() => {
+    const totals = new Map<string, RequirementReportRow>();
+    const addRequirement = (materialName: string, requiredQuantity: number, unit: string) => {
+      if (!materialName.trim() || requiredQuantity <= 0) return;
+      const key = `${materialName.trim().toLowerCase()}-${unit}`;
+      const existing = totals.get(key);
+      totals.set(key, {
+        materialName,
+        requiredQuantity: Math.ceil((existing?.requiredQuantity || 0) + requiredQuantity),
+        unit,
+      });
+    };
 
-  const selectedRecipeSet = useMemo(() => new Set(selectedRecipeIds), [selectedRecipeIds]);
+    productionPlans.forEach(plan => {
+      const recipe = recipes.find(item => item.id === plan.recipeId);
+      if (!recipe || plan.quantity <= 0) return;
 
-  useEffect(() => {
-    updateRequirementReportSelection({ selectedRecipeIds, productionQtyByRecipe });
-  }, [productionQtyByRecipe, selectedRecipeIds, updateRequirementReportSelection]);
-
-  const reportInputs = useMemo(() => (
-    recipes
-      .filter(recipe => selectedRecipeSet.has(recipe.id))
-      .map(recipe => {
-        const product = products.find(item => item.id === recipe.productId);
-        const flavour = flavours.find(item => item.id === recipe.flavourId);
-        const productionKg = Number(productionQtyByRecipe[recipe.id] || recipe.batchSize);
-        return {
-          recipe,
-          recipeName: [product?.name, flavour?.name].filter(Boolean).join(' - ') || recipe.id,
-          productionKg,
-        };
-      })
-      .filter(input => input.productionKg > 0)
-  ), [flavours, productionQtyByRecipe, products, recipes, selectedRecipeSet]);
-
-  const materialRequirementReport = useMemo(
-    () => generateConsolidatedMaterialRequirementReport(reportInputs, materials),
-    [materials, reportInputs]
-  );
-
-  const packagingRequirementRows = useMemo(() => {
-    const productTotals = new Map<string, {
-      productId: string;
-      productName: string;
-      sachetRollKg: number;
-      sachetRolls: number;
-      emptySachets: number;
-      flavouredBoxes: number;
-      assortedBoxes: number;
-    }>();
-
-    reportInputs.forEach(input => {
-      const product = products.find(item => item.id === input.recipe.productId);
-      const production = calculateProduction(input.recipe, materials, input.productionKg);
-      const packaging = calculatePackaging(production.totalFinishedUnits, input.recipe.packaging || [], materials);
-      const existing = productTotals.get(input.recipe.productId) || {
-        productId: input.recipe.productId,
-        productName: product?.name || input.recipe.productId,
-        sachetRollKg: 0,
-        sachetRolls: 0,
-        emptySachets: 0,
-        flavouredBoxes: 0,
-        assortedBoxes: 0,
-      };
-
-      packaging.forEach(item => {
-        const display = getPackagingRequiredDisplay(item);
-        const materialName = (item.name || item.materialId).toLowerCase();
-        const isBoxMaterial = materialName.includes('box');
-        const isSachetMaterial = item.packagingUnit === 'Roll' || materialName.includes('sachet');
-
-        if (isBoxMaterial) return;
-        if (!isSachetMaterial) return;
-
-        if (item.packagingUnit === 'Roll' && item.emptySachetWeightG && item.emptySachetWeightG > 0) {
-          const wastageMultiplier = 1 - ((item.wastagePercent || 0) / 100);
-          const requiredKg = wastageMultiplier > 0
-            ? (item.requiredSachets * item.emptySachetWeightG) / wastageMultiplier / 1000
-            : 0;
-          existing.sachetRollKg += requiredKg;
-          existing.sachetRolls += display.quantity;
-          return;
-        }
-
-        existing.emptySachets += display.quantity;
+      const production = calculateProduction(normalizeReportRecipeUnits(recipe), materials, plan.quantity);
+      production.rawMaterials.forEach(item => {
+        addRequirement(item.name || item.materialId, item.required, item.unit);
       });
 
-      const savedProduction = productionCalculations.find(item => item.recipeId === input.recipe.id);
-      existing.flavouredBoxes += savedProduction?.flavouredBoxes || 0;
-      productTotals.set(input.recipe.productId, existing);
+      const packaging = calculatePackaging(production.totalFinishedUnits, recipe.packaging || [], materials);
+      packaging.forEach(item => {
+        const display = getPackagingRequiredDisplay(item);
+        addRequirement(item.name || item.materialId, display.quantity, display.unit);
+      });
+
+      const savedProduction = productionCalculations.find(item => item.recipeId === plan.recipeId);
+      if (savedProduction?.flavouredBoxes) {
+        addRequirement('Flavoured Boxes', Math.ceil(savedProduction.flavouredBoxes), 'Nos');
+      }
     });
 
-    return Array.from(productTotals.values())
-      .map(row => ({
-        ...row,
-        sachetRollKg: Number(row.sachetRollKg.toFixed(6)),
-        sachetRolls: Math.ceil(row.sachetRolls),
-        emptySachets: Math.ceil(row.emptySachets),
-        flavouredBoxes: Math.ceil(row.flavouredBoxes),
-        assortedBoxes: Math.ceil(assortedBoxCalculations.find(item => item.productId === row.productId)?.totalAssortedBoxes || 0),
-      }))
-      .sort((a, b) => a.productName.localeCompare(b.productName));
-  }, [assortedBoxCalculations, materials, productionCalculations, products, reportInputs]);
+    assortedBoxCalculations.forEach(item => {
+      if (item.totalAssortedBoxes > 0) {
+        addRequirement('Assorted Boxes', Math.ceil(item.totalAssortedBoxes), 'Nos');
+      }
+    });
+
+    return Array.from(totals.values()).sort((a, b) => a.materialName.localeCompare(b.materialName));
+  }, [assortedBoxCalculations, materials, productionCalculations, productionPlans, recipes]);
+
+  const packagingReportRows = useMemo<RequirementReportRow[]>(() => {
+    const totals = new Map<string, RequirementReportRow>();
+    const addPackaging = (materialName: string, requiredQuantity: number, unit: string) => {
+      if (!materialName.trim() || requiredQuantity <= 0) return;
+      const key = `${materialName.trim().toLowerCase()}-${unit}`;
+      const existing = totals.get(key);
+      totals.set(key, {
+        materialName,
+        requiredQuantity: Math.ceil((existing?.requiredQuantity || 0) + requiredQuantity),
+        unit,
+      });
+    };
+
+    productionPlans.forEach(plan => {
+      const recipe = recipes.find(item => item.id === plan.recipeId);
+      if (!recipe || plan.quantity <= 0) return;
+      const production = calculateProduction(normalizeReportRecipeUnits(recipe), materials, plan.quantity);
+      const packaging = calculatePackaging(production.totalFinishedUnits, recipe.packaging || [], materials);
+      packaging.forEach(item => {
+        const display = getPackagingRequiredDisplay(item);
+        addPackaging(item.name || item.materialId, display.quantity, display.unit);
+      });
+    });
+
+    return Array.from(totals.values()).sort((a, b) => a.materialName.localeCompare(b.materialName));
+  }, [materials, productionPlans, recipes]);
 
   const productionReportRows = useMemo(() => (
     productionPlans
@@ -684,7 +674,7 @@ export function Reports() {
           };
         }
 
-        const production = calculateProduction(recipe, materials, plan.quantity);
+        const production = calculateProduction(normalizeReportRecipeUnits(recipe), materials, plan.quantity);
         const packaging = calculatePackaging(production.totalFinishedUnits, recipe.packaging || [], materials);
 
         const rawMaterials = production.rawMaterials
@@ -717,23 +707,6 @@ export function Reports() {
         };
       })
   ), [dateFrom, dateTo, flavours, materials, productionPlans, products, recipes]);
-
-  const toggleRecipeSelection = (recipeId: string) => {
-    setSelectedRecipeIds(prev =>
-      prev.includes(recipeId) ? prev.filter(id => id !== recipeId) : [...prev, recipeId]
-    );
-  };
-
-  const selectAllRecipes = () => {
-    setSelectedRecipeIds(recipes.map(recipe => recipe.id));
-    setProductionQtyByRecipe(prev => {
-      const next = { ...prev };
-      recipes.forEach(recipe => {
-        if (!next[recipe.id]) next[recipe.id] = String(recipe.batchSize);
-      });
-      return next;
-    });
-  };
 
   if (isInventoryMovementRoute) {
     return <InventoryMovementView />;
@@ -829,110 +802,30 @@ export function Reports() {
             
             <TabsContent value="requirement">
               <div className="space-y-6">
-                <div className="flex flex-wrap gap-3">
-                  <Button variant="outline" onClick={selectAllRecipes}>Select All Recipes</Button>
-                  <Button variant="outline" onClick={() => setSelectedRecipeIds([])}>Clear Selection</Button>
+                <div className="text-sm text-muted-foreground">
+                  Requirement Report is generated automatically from saved production planning records.
                 </div>
-
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Select</TableHead>
-                      <TableHead>Recipe Name</TableHead>
-                      <TableHead>Version</TableHead>
-                      <TableHead>Production Quantity (Kg)</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {recipes.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={4} className="text-center py-6 text-muted-foreground">No recipes available.</TableCell>
-                      </TableRow>
-                    )}
-                    {recipes.map(recipe => {
-                      const product = products.find(item => item.id === recipe.productId);
-                      const flavour = flavours.find(item => item.id === recipe.flavourId);
-                      return (
-                        <TableRow key={recipe.id}>
-                          <TableCell>
-                            <input
-                              type="checkbox"
-                              checked={selectedRecipeSet.has(recipe.id)}
-                              onChange={() => toggleRecipeSelection(recipe.id)}
-                              className="h-4 w-4"
-                            />
-                          </TableCell>
-                          <TableCell>{[product?.name, flavour?.name].filter(Boolean).join(' - ') || '-'}</TableCell>
-                          <TableCell>{recipe.version}</TableCell>
-                          <TableCell>
-                            <Input
-                              type="number"
-                              min="0"
-                              value={productionQtyByRecipe[recipe.id] ?? String(recipe.batchSize)}
-                              onChange={event => setProductionQtyByRecipe(prev => ({ ...prev, [recipe.id]: event.target.value }))}
-                              className="max-w-40"
-                            />
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-
-                <div className="border-t pt-6">
-                  <h3 className="text-xl font-semibold mb-4">Raw Material Requirement</h3>
+                <div>
+                  <h3 className="text-xl font-semibold mb-4">Requirement Report</h3>
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Material</TableHead>
-                        <TableHead>Total Requirement</TableHead>
+                        <TableHead>Material Name</TableHead>
+                        <TableHead>Required Quantity</TableHead>
+                        <TableHead>Unit</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {materialRequirementReport.consolidatedRawMaterials.length === 0 && (
+                      {requirementReportRows.length === 0 && (
                         <TableRow>
-                          <TableCell colSpan={2} className="text-center py-6 text-muted-foreground">Select recipes to calculate raw material requirement.</TableCell>
+                          <TableCell colSpan={3} className="text-center py-6 text-muted-foreground">No saved production planning records available.</TableCell>
                         </TableRow>
                       )}
-                      {materialRequirementReport.consolidatedRawMaterials.map(row => (
-                        <TableRow key={row.materialId}>
-                          <TableCell>{row.name}</TableCell>
-                          <TableCell>{row.totalRequired} {row.unit}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-
-                <div className="border-t pt-6">
-                  <h3 className="text-xl font-semibold mb-4">Packaging Requirement</h3>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Product</TableHead>
-                        <TableHead>Required Sachet KG</TableHead>
-                        <TableHead>Required Rolls</TableHead>
-                        <TableHead>Empty Sachets</TableHead>
-                        <TableHead>Flavoured Boxes</TableHead>
-                        <TableHead>Assorted Boxes</TableHead>
-                        <TableHead>Total Boxes</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {packagingRequirementRows.length === 0 && (
-                        <TableRow>
-                          <TableCell colSpan={7} className="text-center py-6 text-muted-foreground">Select recipes to calculate packaging requirement.</TableCell>
-                        </TableRow>
-                      )}
-                      {packagingRequirementRows.map(row => (
-                        <TableRow key={row.productId}>
-                          <TableCell>{row.productName}</TableCell>
-                          <TableCell>{row.sachetRollKg} kg</TableCell>
-                          <TableCell>{row.sachetRolls} Roll</TableCell>
-                          <TableCell>{row.emptySachets} Nos</TableCell>
-                          <TableCell>{row.flavouredBoxes} Nos</TableCell>
-                          <TableCell>{row.assortedBoxes} Nos</TableCell>
-                          <TableCell>{row.flavouredBoxes + row.assortedBoxes} Nos</TableCell>
+                      {requirementReportRows.map(row => (
+                        <TableRow key={`${row.materialName}-${row.unit}`}>
+                          <TableCell>{row.materialName}</TableCell>
+                          <TableCell>{row.requiredQuantity}</TableCell>
+                          <TableCell>{row.unit}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -951,15 +844,15 @@ export function Reports() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {materialRequirementReport.consolidatedPackagingMaterials.length === 0 && (
+                  {packagingReportRows.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={2} className="text-center py-12 text-muted-foreground">Select recipes in Requirement Report to view packaging summary.</TableCell>
+                      <TableCell colSpan={2} className="text-center py-12 text-muted-foreground">No saved production planning records available.</TableCell>
                     </TableRow>
                   )}
-                  {materialRequirementReport.consolidatedPackagingMaterials.map(material => (
-                    <TableRow key={material.materialId}>
-                      <TableCell>{material.name}</TableCell>
-                      <TableCell>{material.totalRequired} {material.unit}</TableCell>
+                  {packagingReportRows.map(material => (
+                    <TableRow key={`${material.materialName}-${material.unit}`}>
+                      <TableCell>{material.materialName}</TableCell>
+                      <TableCell>{material.requiredQuantity} {material.unit}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

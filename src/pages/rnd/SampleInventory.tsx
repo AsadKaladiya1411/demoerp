@@ -17,6 +17,7 @@ import {
   seedSampleInventoryRecords,
   type SampleInventoryRecord,
 } from './rndStore';
+import { createRndSampleRequirement } from '../employee-b/rndRequirementStore';
 
 type AdjustmentMode = 'Increase' | 'Decrease';
 
@@ -47,6 +48,13 @@ export function SampleInventory() {
   const [adjustMode, setAdjustMode] = useState<AdjustmentMode>('Increase');
   const [adjustRemarks, setAdjustRemarks] = useState('');
   const [message, setMessage] = useState('');
+  const [reqDialogOpen, setReqDialogOpen] = useState(false);
+  const [reqMaterialId, setReqMaterialId] = useState(rawMaterials[0]?.id ?? '');
+  const [reqQuantity, setReqQuantity] = useState('');
+  const [reqPurpose, setReqPurpose] = useState<'Trial' | 'Base Formula' | 'Testing'>('Trial');
+  const [reqPriority, setReqPriority] = useState<'Low' | 'Medium' | 'High'>('Medium');
+  const [reqRequiredDate, setReqRequiredDate] = useState(today());
+  const [reqRemarks, setReqRemarks] = useState('');
 
   const canMutate = currentUser.role === 'Employee A';
 
@@ -66,6 +74,16 @@ export function SampleInventory() {
   const openReceive = () => {
     setMessage('');
     setReceiveOpen(true);
+  };
+
+  const openRequestDialog = () => {
+    setReqMaterialId(rawMaterials[0]?.id ?? '');
+    setReqQuantity('');
+    setReqPurpose('Trial');
+    setReqPriority('Medium');
+    setReqRequiredDate(today());
+    setReqRemarks('');
+    setReqDialogOpen(true);
   };
 
   const openIssue = (record: SampleInventoryRecord) => {
@@ -117,6 +135,33 @@ export function SampleInventory() {
     setReceiveOpen(false);
     resetReceiveForm();
     setMessage('Sample created.');
+  };
+
+  const saveRequest = () => {
+    const material = rawMaterials.find(m => m.id === reqMaterialId) || null;
+    if (!material) {
+      setMessage('Select a material.');
+      return;
+    }
+    const qty = Number(reqQuantity || 0);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      setMessage('Enter a valid required quantity.');
+      return;
+    }
+
+    createRndSampleRequirement({
+      requestedBy: currentUser.name,
+      materialName: material.name,
+      quantity: qty,
+      unit: material.unit,
+      purpose: reqPurpose,
+      priority: reqPriority,
+      requiredDate: reqRequiredDate,
+      remarks: reqRemarks,
+    });
+
+    setReqDialogOpen(false);
+    setMessage('R&D sample requirement generated.');
   };
 
   const saveIssue = () => {
@@ -187,10 +232,15 @@ export function SampleInventory() {
             <CardDescription>Only raw materials from the ERP master list can be used here.</CardDescription>
           </div>
           {canMutate && (
-            <Button onClick={openReceive} className="w-fit">
-              <Plus className="mr-2 h-4 w-4" />
-              Receive Sample
-            </Button>
+            <div className="flex gap-2">
+              <Button onClick={openReceive} className="w-fit">
+                <Plus className="mr-2 h-4 w-4" />
+                Receive Sample
+              </Button>
+              <Button variant="outline" onClick={openRequestDialog} className="w-fit">
+                Request Sample
+              </Button>
+            </div>
           )}
         </CardHeader>
         <CardContent>
@@ -313,6 +363,76 @@ export function SampleInventory() {
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setReceiveOpen(false)}>Cancel</Button>
               <Button onClick={saveReceive}>Save</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={reqDialogOpen} onOpenChange={setReqDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Generate R&D Sample Requirement</DialogTitle>
+            <DialogDescription>Create a new requirement for R&D samples.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Raw Material</label>
+              <Select value={reqMaterialId} onValueChange={setReqMaterialId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select raw material" />
+                </SelectTrigger>
+                <SelectContent>
+                  {rawMaterials.map(material => (
+                    <SelectItem key={material.id} value={material.id}>{material.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Required Quantity</label>
+                <Input type="number" value={reqQuantity} onChange={e => setReqQuantity(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Unit</label>
+                <Input readOnly value={rawMaterials.find(m => m.id === reqMaterialId)?.unit || ''} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Purpose</label>
+                <Select value={reqPurpose} onValueChange={value => setReqPurpose(value as any)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Trial">Trial</SelectItem>
+                    <SelectItem value="Base Formula">Base Formula</SelectItem>
+                    <SelectItem value="Testing">Testing</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Priority</label>
+                <Select value={reqPriority} onValueChange={value => setReqPriority(value as any)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Low">Low</SelectItem>
+                    <SelectItem value="Medium">Medium</SelectItem>
+                    <SelectItem value="High">High</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Required Date</label>
+                <Input type="date" value={reqRequiredDate} onChange={e => setReqRequiredDate(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Remarks</label>
+                <Input value={reqRemarks} onChange={e => setReqRemarks(e.target.value)} />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setReqDialogOpen(false)}>Cancel</Button>
+              <Button onClick={saveRequest}>Save Requirement</Button>
             </div>
           </div>
         </DialogContent>
