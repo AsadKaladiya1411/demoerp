@@ -35,7 +35,8 @@ const preventNumberWheel = (event: WheelEvent<HTMLInputElement>) => {
 export function BaseFormulation() {
   const { currentUser } = useAuth();
   const { materials } = useErpData();
-  const rawMaterials = useMemo(() => materials.filter(material => material.type === 'Raw Material'), [materials]);
+  const _rawMaterials = useMemo(() => materials.filter(material => material.type === 'Raw Material'), [materials]);
+  void _rawMaterials;
   const [savedFormulas, setSavedFormulas] = useState<SavedBaseFormula[]>(() => getBaseFormulas().map(record => ({
     id: record.id,
     productName: record.productName,

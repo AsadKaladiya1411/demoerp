@@ -61,7 +61,7 @@ export function PendingMaterialTests() {
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
       <div>
         <h2 className="text-3xl font-bold tracking-tight text-primary">Pending Material Tests</h2>
-        <div className="text-sm text-muted-foreground">Material test slips automatically generated from Employee C Goods Receipt.</div>
+        <div className="text-sm text-muted-foreground">Material test slips automatically generated from Yougeshbhai Goods Receipt.</div>
       </div>
 
       <Card>

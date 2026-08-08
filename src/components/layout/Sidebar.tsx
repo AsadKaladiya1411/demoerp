@@ -53,6 +53,10 @@ export function Sidebar() {
     { name: 'Vendor Management', href: '/masters/vendors', icon: Store, permission: 'vendors' },
     { name: 'Pending Material Tests', href: '/employee-d/pending-material-tests', icon: FlaskConical, permission: 'employeeDPendingTests' },
   ];
+  // Build employee A links by selecting relevant core links (Employee A permissions)
+  const employeeALinkPermissions: Permission[] = ['dashboard', 'categories', 'products', 'recipes', 'assortedConfiguration', 'reports', 'masterReport'];
+  const employeeALinks = defaultLinks.filter(l => employeeALinkPermissions.includes(l.permission));
+
   const links = currentUser.role === 'Employee B' ? employeeBLinks : currentUser.role === 'Employee C' ? employeeCLinks : currentUser.role === 'Employee D' ? employeeDLinks : defaultLinks;
   const showRndSection = currentUser.role === 'Boss' || currentUser.role === 'Employee A';
 
@@ -84,16 +88,54 @@ export function Sidebar() {
       </div>
       <div className="flex-1 overflow-auto py-4">
         <nav className="space-y-4 px-4 text-sm font-medium">
-          <div className="space-y-1">
-            <div className="px-3 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Core</div>
-            {renderLinks(links)}
-          </div>
-          
-          {showRndSection && (
-            <div className="space-y-1">
-              <div className="px-3 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Research & Development</div>
-              {renderLinks(rndLinks)}
-            </div>
+          {currentUser.role === 'Boss' ? (
+            <>
+              <div className="space-y-1">
+                <div className="px-3 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Core</div>
+                {renderLinks(defaultLinks)}
+              </div>
+
+              <div className="space-y-1">
+                <div className="px-3 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Gokulbhai</div>
+                {renderLinks(employeeALinks)}
+              </div>
+
+              <div className="space-y-1">
+                <div className="px-3 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Parthbhai</div>
+                {renderLinks(employeeBLinks)}
+              </div>
+
+              <div className="space-y-1">
+                <div className="px-3 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Yougeshbhai</div>
+                {renderLinks(employeeCLinks)}
+              </div>
+
+              <div className="space-y-1">
+                <div className="px-3 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Kushalbhai</div>
+                {renderLinks(employeeDLinks)}
+              </div>
+
+              {showRndSection && (
+                <div className="space-y-1">
+                  <div className="px-3 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Research & Development</div>
+                  {renderLinks(rndLinks)}
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <div className="space-y-1">
+                <div className="px-3 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Core</div>
+                {renderLinks(links)}
+              </div>
+
+              {showRndSection && (
+                <div className="space-y-1">
+                  <div className="px-3 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Research & Development</div>
+                  {renderLinks(rndLinks)}
+                </div>
+              )}
+            </>
           )}
         </nav>
       </div>

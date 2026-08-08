@@ -1,5 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AppLayout } from './components/layout/AppLayout';
+import { ProtectedRoute } from '@/auth/ProtectedRoute';
+import LoginPage from './pages/Login';
 
 import { Dashboard } from './pages/Dashboard';
 import { Categories } from './pages/masters/Categories';
@@ -37,7 +39,8 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<AppLayout />}>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
           <Route index element={<RequirePermission permission="dashboard"><Dashboard /></RequirePermission>} />
           <Route path="masters/categories" element={<RequirePermission permission="categories"><Categories /></RequirePermission>} />
           <Route path="masters/products" element={<RequirePermission permission="products"><Products /></RequirePermission>} />

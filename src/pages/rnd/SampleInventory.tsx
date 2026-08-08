@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useAuth } from '@/context/AuthContext';
 import { useErpData } from '@/context/ErpContext';
-import { ArrowDownToLine, History, Microscope, Plus, SlidersHorizontal } from 'lucide-react';
+import { ArrowDownToLine, History, Microscope, SlidersHorizontal } from 'lucide-react';
 import {
   adjustSampleQuantity,
   getSampleInventoryRecords,
@@ -27,7 +27,8 @@ const formatQuantity = (value: number) => `${value > 0 ? '+' : ''}${value}`;
 export function SampleInventory() {
   const { currentUser } = useAuth();
   const { materials } = useErpData();
-  const rawMaterials = useMemo(() => materials.filter(material => material.type === 'Raw Material'), [materials]);
+  const _rawMaterials = useMemo(() => materials.filter(material => material.type === 'Raw Material'), [materials]);
+  void _rawMaterials;
   const [inventory, setInventory] = useState<SampleInventoryRecord[]>(() => seedSampleInventoryRecords(materials));
   const [issueOpen, setIssueOpen] = useState(false);
   const [adjustOpen, setAdjustOpen] = useState(false);

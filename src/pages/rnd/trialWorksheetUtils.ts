@@ -10,7 +10,7 @@ export const createTrialIngredientsFromBaseFormula = (baseFormula: SavedBaseForm
     return {
       id: `${baseFormula.id}-trial-ingredient-${index + 1}`,
       ingredientName: ingredient.rawMaterialName,
-      rawMaterialId: ingredient.materialId,
+      rawMaterialId: ingredient.id,
       manufacturer: ingredient.manufacturer,
       uom: ingredient.uom,
       baseQuantity,

@@ -39,8 +39,8 @@ export function EmployeeBMasterReport() {
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight text-primary">Employee B Master Report</h2>
-          <div className="text-sm text-muted-foreground">Consolidated purchase tracking report for Employee C handoff</div>
+          <h2 className="text-3xl font-bold tracking-tight text-primary">Parthbhai Master Report</h2>
+          <div className="text-sm text-muted-foreground">Consolidated purchase tracking report for Yougeshbhai handoff</div>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline"><Printer className="mr-2 h-4 w-4" /> Print</Button>
@@ -78,7 +78,7 @@ export function EmployeeBMasterReport() {
       <Card>
         <CardHeader>
           <CardTitle>Status Summary</CardTitle>
-          <CardDescription>Current status of all EMP B purchase records.</CardDescription>
+          <CardDescription>Current status of all Parthbhai purchase records.</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -103,7 +103,7 @@ export function EmployeeBMasterReport() {
       <Card>
         <CardHeader>
           <CardTitle>Raw Material Records</CardTitle>
-          <CardDescription>RM purchase records entered by Employee B.</CardDescription>
+          <CardDescription>RM purchase records entered by Parthbhai.</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -144,7 +144,7 @@ export function EmployeeBMasterReport() {
       <Card>
         <CardHeader>
           <CardTitle>Sachet Records</CardTitle>
-          <CardDescription>PM sachet purchase records entered by Employee B.</CardDescription>
+          <CardDescription>PM sachet purchase records entered by Parthbhai.</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -189,7 +189,7 @@ export function EmployeeBMasterReport() {
       <Card>
         <CardHeader>
           <CardTitle>Box Records</CardTitle>
-          <CardDescription>PM box purchase records entered by Employee B.</CardDescription>
+          <CardDescription>PM box purchase records entered by Parthbhai.</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>

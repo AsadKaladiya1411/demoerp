@@ -300,7 +300,7 @@ export function GoodsReceipt() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-3xl font-bold tracking-tight text-primary">Goods Receipt</h2>
-            <p className="text-sm text-muted-foreground">Receive purchase records from Employee B and update inventory quantities.</p>
+            <p className="text-sm text-muted-foreground">Receive purchase records from Parthbhai and update inventory quantities.</p>
           </div>
           <Button variant="outline" onClick={() => navigate('/employee-c/goods-receipt')}>
             <ArrowLeft className="mr-2 h-4 w-4" /> Back to list
@@ -311,7 +311,7 @@ export function GoodsReceipt() {
           <Card>
             <CardHeader>
               <CardTitle>Purchase Information</CardTitle>
-              <CardDescription>Read-only purchase details from Employee B.</CardDescription>
+              <CardDescription>Read-only purchase details from Parthbhai.</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">

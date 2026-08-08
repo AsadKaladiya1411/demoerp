@@ -1,10 +1,12 @@
-import { User } from 'lucide-react';
+import { User, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 export function TopNav() {
-  const { currentUser, users, setCurrentUserId } = useAuth();
+  const { currentUser, users, setCurrentUserId, logout } = useAuth();
+  const navigate = useNavigate();
 
   return (
     <header className="flex h-16 shrink-0 items-center justify-between border-b bg-card px-6">
@@ -29,6 +31,18 @@ export function TopNav() {
         <Button variant="ghost" size="icon" className="rounded-full">
           <User className="h-5 w-5" />
           <span className="sr-only">Profile</span>
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="rounded-full"
+          onClick={() => {
+            logout();
+            navigate('/login', { replace: true });
+          }}
+        >
+          <LogOut className="h-5 w-5" />
+          <span className="sr-only">Logout</span>
         </Button>
       </div>
     </header>

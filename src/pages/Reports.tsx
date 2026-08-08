@@ -307,7 +307,7 @@ function InventoryMovementView() {
       goodsReceipt: {
         key: 'goodsReceipt',
         title: reportTabLabels.goodsReceipt,
-        description: 'Automatically generated from Employee C Goods Receipt saves.',
+        description: 'Automatically generated from Yougeshbhai Goods Receipt saves.',
         rows: goodsReceiptRows,
         columns: [
           { header: 'Transaction ID', render: row => row.id, className: 'font-mono text-xs' },
@@ -327,7 +327,7 @@ function InventoryMovementView() {
       productionIssue: {
         key: 'productionIssue',
         title: reportTabLabels.productionIssue,
-        description: 'Automatically generated from Employee C Production Issue saves.',
+        description: 'Automatically generated from Yougeshbhai Production Issue saves.',
         rows: productionIssueRows,
         columns: [
           { header: 'Transaction ID', render: row => row.id, className: 'font-mono text-xs' },
@@ -345,7 +345,7 @@ function InventoryMovementView() {
       productionReturn: {
         key: 'productionReturn',
         title: reportTabLabels.productionReturn,
-        description: 'Automatically generated from Employee C Production Return saves.',
+        description: 'Automatically generated from Yougeshbhai Production Return saves.',
         rows: productionReturnRows,
         columns: [
           { header: 'Transaction ID', render: row => row.id, className: 'font-mono text-xs' },
@@ -379,7 +379,7 @@ function InventoryMovementView() {
       inventoryMovement: {
         key: 'inventoryMovement',
         title: reportTabLabels.inventoryMovement,
-        description: 'Central inventory ledger generated from all Employee C transactions.',
+        description: 'Central inventory ledger generated from all Yougeshbhai transactions.',
         rows: inventoryMovementRows,
         showTransactionTypeFilter: true,
         columns: [
@@ -461,8 +461,8 @@ function InventoryMovementView() {
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight text-primary">Employee C Reports</h2>
-          <p className="text-sm text-muted-foreground">Read-only reports generated automatically from Employee C module transactions.</p>
+          <h2 className="text-3xl font-bold tracking-tight text-primary">Yougeshbhai Reports</h2>
+          <p className="text-sm text-muted-foreground">Read-only reports generated automatically from Yougeshbhai module transactions.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={() => setExportMessage('Export placeholder: connect CSV/PDF export later.')}>Export</Button>
@@ -576,7 +576,7 @@ export function Reports() {
   const { productionPlans, products, flavours, recipes, materials, productionCalculations, assortedBoxCalculations } = useErpData();
   const { currentUser } = useAuth();
   const isInventoryMovementRoute = location.pathname.startsWith('/inventory-movement');
-  const isEmployeeB = currentUser.role === 'Employee B';
+  const isEmployeeB = currentUser.role === 'Employee B' || currentUser.role === 'Boss';
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const requirementReportRows = useMemo<RequirementReportRow[]>(() => {

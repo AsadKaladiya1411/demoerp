@@ -169,11 +169,11 @@ export function PendingSampleReceipts() {
       <div className="space-y-2">
         <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-primary">
           <PackageOpen className="h-3.5 w-3.5" />
-          Employee A
+          Gokulbhai
         </div>
         <div className="space-y-1">
           <h2 className="text-3xl font-bold tracking-tight text-primary">Pending Sample Receipts</h2>
-          <p className="text-sm text-muted-foreground">Receive sample materials dispatched by Employee B and update the local sample inventory.</p>
+          <p className="text-sm text-muted-foreground">Receive sample materials dispatched by Parthbhai and update the local sample inventory.</p>
         </div>
       </div>
 
@@ -313,7 +313,7 @@ export function PendingSampleReceipts() {
       <Card>
         <CardHeader>
           <CardTitle>Received Sample Receipts</CardTitle>
-          <CardDescription>Receipts already accepted by Employee A.</CardDescription>
+          <CardDescription>Receipts already accepted by Gokulbhai.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="rounded-md border">
@@ -409,7 +409,7 @@ export function PendingSampleReceipts() {
       <Card>
         <CardHeader>
           <CardTitle>Scope</CardTitle>
-          <CardDescription>Employee A receives dispatched samples and updates the isolated sample inventory only.</CardDescription>
+          <CardDescription>Gokulbhai receives dispatched samples and updates the isolated sample inventory only.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2 text-sm text-muted-foreground">
           <div>Pending dispatches: {pendingList.length}</div>

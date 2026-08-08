@@ -259,7 +259,7 @@ export function ProductionIssue() {
 
               <div className="flex items-start gap-3 rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
                 <Warehouse className="mt-0.5 h-4 w-4 text-primary" />
-                <span>Inventory is reduced only when the issue is saved. The same stock is used across Employee C inventory views and Employee B tracking data.</span>
+                <span>Inventory is reduced only when the issue is saved. The same stock is used across Employee C inventory views and Parthbhai tracking data.</span>
               </div>
             </CardContent>
           </Card>

@@ -95,7 +95,8 @@ const createEmptyPurchaseForm = (): PurchaseForm => ({
   remarks: '',
 });
 
-const initialRequirementRows: SampleRequirementRow[] = [];
+const _initialRequirementRows: SampleRequirementRow[] = [];
+void _initialRequirementRows;
 
 const mapStoreToRow = (r: any): SampleRequirementRow => ({
   id: r.requirementId,
@@ -140,7 +141,7 @@ export function RndSampleRequirement() {
   const [form, setForm] = useState<PurchaseForm>(createEmptyPurchaseForm);
   const [message, setMessage] = useState('');
 
-  const canEdit = currentUser.role === 'Employee B';
+  const canEdit = currentUser.role === 'Employee B' || currentUser.role === 'Boss';
   const canView = currentUser.role === 'Boss' || canEdit;
   const displayRows = canView ? rows : [];
   useEffect(() => {
@@ -324,7 +325,7 @@ export function RndSampleRequirement() {
       quantity: Number(purchase.purchasedQuantity || 0),
       unit: purchase.unit,
       dispatchedBy: currentUser.name,
-      dispatchRemarks: 'Auto-dispatch from Employee B after receive',
+      dispatchRemarks: 'Auto-dispatch from Parthbhai after receive',
     });
 
     setMessage('Material marked received and dispatched to R&D.');
