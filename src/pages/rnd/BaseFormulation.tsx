@@ -2,10 +2,9 @@ import { useMemo, useState, type WheelEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useAuth } from '@/context/AuthContext';
-import { useErpData, type Product } from '@/context/ErpContext';
+import { useErpData } from '@/context/ErpContext';
 import { Plus, Trash2, Microscope, Save } from 'lucide-react';
 import { calculateBaseFormulaSummary, createIngredientDraft, todayString, type BaseFormulaIngredientDraft } from './baseFormulaUtils';
 import { getBaseFormulas, getNextBaseFormulaNumber, saveBaseFormula } from './rndStore';
@@ -35,7 +34,7 @@ const preventNumberWheel = (event: WheelEvent<HTMLInputElement>) => {
 
 export function BaseFormulation() {
   const { currentUser } = useAuth();
-  const { products, materials } = useErpData();
+  const { materials } = useErpData();
   const rawMaterials = useMemo(() => materials.filter(material => material.type === 'Raw Material'), [materials]);
   const [savedFormulas, setSavedFormulas] = useState<SavedBaseFormula[]>(() => getBaseFormulas().map(record => ({
     id: record.id,
@@ -51,15 +50,14 @@ export function BaseFormulation() {
     ingredientCount: record.ingredientCount,
   })));
   const [formulaId, setFormulaId] = useState(() => `BF-${getNextBaseFormulaNumber()}`);
-  const [selectedProductId, setSelectedProductId] = useState('');
+  const [productName, setProductName] = useState('');
   const [formulaDate, setFormulaDate] = useState(todayString());
-  const [batchSize, setBatchSize] = useState('100');
-  const [servingSize, setServingSize] = useState('25');
+  const [batchSize, setBatchSize] = useState('');
+  const [servingSize, setServingSize] = useState('');
   const [ingredients, setIngredients] = useState<BaseFormulaIngredientDraft[]>(createInitialIngredients);
   const [message, setMessage] = useState('');
 
   const canMutate = currentUser.role === 'Employee A';
-  const selectedProduct = products.find(product => product.id === selectedProductId) ?? null;
   const batchSizeValue = Number(batchSize || 0);
   const servingSizeValue = Number(servingSize || 0);
   const summary = useMemo(() => calculateBaseFormulaSummary(ingredients, batchSizeValue, servingSizeValue), [batchSizeValue, ingredients, servingSizeValue]);
@@ -78,10 +76,10 @@ export function BaseFormulation() {
 
   const clearForm = (nextFormulaNumber: number) => {
     setFormulaId(`BF-${String(nextFormulaNumber).padStart(4, '0')}`);
-    setSelectedProductId('');
+    setProductName('');
     setFormulaDate(todayString());
-    setBatchSize('100');
-    setServingSize('25');
+    setBatchSize('');
+    setServingSize('');
     setIngredients(createInitialIngredients());
   };
 
@@ -89,8 +87,9 @@ export function BaseFormulation() {
     const batch = Number(batchSize || 0);
     const serving = Number(servingSize || 0);
     const validIngredients = ingredients.filter(ingredient => (ingredient.materialName || '').trim());
+    const trimmedProductName = productName.trim();
 
-    if (!selectedProduct) {
+    if (!trimmedProductName) {
       setMessage('Product required.');
       return;
     }
@@ -125,7 +124,7 @@ export function BaseFormulation() {
 
     const savedRecord: SavedBaseFormula = {
       id: formulaId,
-      productName: selectedProduct.name,
+      productName: trimmedProductName,
       date: formulaDate,
       batchSize: batch,
       servingSize: serving,
@@ -140,8 +139,8 @@ export function BaseFormulation() {
     saveBaseFormula({
       id: savedRecord.id,
       baseFormulaNumber: savedRecord.id,
-      productId: selectedProduct.id,
-      productName: selectedProduct.name,
+      productId: trimmedProductName,
+      productName: trimmedProductName,
       date: savedRecord.date,
       batchSize: savedRecord.batchSize,
       servingSize: savedRecord.servingSize,
@@ -210,30 +209,22 @@ export function BaseFormulation() {
             <CardTitle>Formula Header</CardTitle>
             <CardDescription>Base Formula ID and Date are auto-managed. Other fields stay within the R&D module.</CardDescription>
           </div>
-          {canMutate && (
-            <Button onClick={validateAndSave} className="w-fit">
-              <Save className="mr-2 h-4 w-4" />
-              Save Base Formula
-            </Button>
-          )}
+          <Button onClick={validateAndSave} className="w-fit" disabled={!canMutate}>
+            <Save className="mr-2 h-4 w-4" />
+            Save Base Formula
+          </Button>
         </CardHeader>
         <CardContent className="space-y-4">
           {message && <div className="rounded-lg border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">{message}</div>}
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <div className="space-y-2 xl:col-span-2">
               <label className="text-sm font-medium">Product</label>
-              <Select value={selectedProductId} onValueChange={setSelectedProductId} disabled={!canMutate}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select product" />
-                </SelectTrigger>
-                <SelectContent>
-                  {products.map((product: Product) => (
-                    <SelectItem key={product.id} value={product.id}>
-                      {product.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Input
+                value={productName}
+                onChange={event => setProductName(event.target.value)}
+                placeholder="Enter product name"
+                disabled={!canMutate}
+              />
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Base Formula ID</label>
