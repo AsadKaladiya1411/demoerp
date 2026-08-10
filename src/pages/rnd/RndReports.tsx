@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useAuth } from '@/context/AuthContext';
+import { useErpData } from '@/context/ErpContext';
 import { BarChart3, FileSpreadsheet, FileText, Filter, Printer, Search, PieChart } from 'lucide-react';
 import { ResponsiveContainer, PieChart as RePieChart, Pie, Cell, Tooltip } from 'recharts';
 import { exportReportToExcel, exportReportToPdf, printReport, type ReportColumn } from './rndReportExports';
@@ -69,6 +70,7 @@ const sortRows = (rows: GenericRow[], sortField: string, direction: SortDirectio
 
 export function RndReports() {
   const { currentUser } = useAuth();
+  const { rndFormulaVersions, rndTrials, rndSampleInventory } = useErpData();
   const [activeTab, setActiveTab] = useState<ReportKey>('formulaLibrary');
   const [searchQueries, setSearchQueries] = useState<Record<ReportKey, string>>({ formulaLibrary: '', trialHistory: '', sampleInventory: '', assessment: '' });
   const [filters, setFilters] = useState<Record<ReportKey, string>>({ formulaLibrary: 'all', trialHistory: 'all', sampleInventory: 'all', assessment: 'all' });
@@ -80,7 +82,7 @@ export function RndReports() {
       key: 'formulaLibrary',
       title: 'Formula Library Report',
       description: 'Approved and historical formula versions with trial references.',
-      rows: buildFormulaLibraryReportRows(),
+      rows: buildFormulaLibraryReportRows(rndFormulaVersions),
       columns: [
         { header: 'Product', accessor: 'product' },
         { header: 'Formula ID', accessor: 'formulaId' },
@@ -97,7 +99,7 @@ export function RndReports() {
       key: 'trialHistory',
       title: 'Trial History Report',
       description: 'All saved trials with assessment state and trial summary.',
-      rows: buildTrialHistoryReportRows(),
+      rows: buildTrialHistoryReportRows(rndTrials),
       columns: [
         { header: 'Trial ID', accessor: 'trialId' },
         { header: 'Trial Number', accessor: 'trialNumber' },
@@ -116,7 +118,7 @@ export function RndReports() {
       key: 'sampleInventory',
       title: 'Sample Inventory Report',
       description: 'Raw-material sample movements, balance, and status tracking.',
-      rows: buildSampleInventoryReportRows(),
+      rows: buildSampleInventoryReportRows(rndSampleInventory),
       columns: [
         { header: 'Sample ID', accessor: 'sampleId' },
         { header: 'Raw Material', accessor: 'rawMaterial' },
@@ -135,7 +137,7 @@ export function RndReports() {
       key: 'assessment',
       title: 'Assessment Report',
       description: 'Linked trial assessment detail with verdict and next action.',
-      rows: buildAssessmentReportRows(),
+      rows: buildAssessmentReportRows(rndTrials),
       columns: [
         { header: 'Trial ID', accessor: 'trialId' },
         { header: 'Trial Number', accessor: 'trialNumber' },
@@ -152,7 +154,7 @@ export function RndReports() {
       filterField: 'verdict',
       filterOptions: ['all', 'Pass', 'Fail', 'Need Modification', 'Approved for Next Stage'].map(value => ({ value, label: value === 'all' ? 'All Verdicts' : value })),
     },
-  ]), []);
+  ]), [rndFormulaVersions, rndSampleInventory, rndTrials]);
 
   const activeReport = reportConfigs.find(report => report.key === activeTab) || reportConfigs[0];
   const searchQuery = searchQueries[activeTab];
@@ -170,9 +172,9 @@ export function RndReports() {
   const exportActiveToPdf = () => exportReportToPdf(activeReport.title, activeReport.columns, filteredRows);
   const printActiveReport = () => printReport(activeReport.title, activeReport.columns, filteredRows);
 
-  const formulaStatus = getFormulaStatusChartData();
-  const trialStatus = getTrialStatusChartData();
-  const sampleStatus = getSampleStatusChartData();
+  const formulaStatus = getFormulaStatusChartData(rndFormulaVersions);
+  const trialStatus = getTrialStatusChartData(rndTrials);
+  const sampleStatus = getSampleStatusChartData(rndSampleInventory);
 
   const chartBlocks = [
     { title: 'Formula Status', data: formulaStatus },

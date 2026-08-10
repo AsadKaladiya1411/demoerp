@@ -1,0 +1,322 @@
+{
+  "users": [],
+  "categories": [
+    {
+      "id": "0.08446844811924281",
+      "code": "CAT-KID",
+      "name": "KIDS",
+      "description": "",
+      "status": "Active",
+      "createdDate": "2026-08-10"
+    }
+  ],
+  "products": [
+    {
+      "id": "0.14261604295801544",
+      "code": "prd-kid01",
+      "name": "kids+3",
+      "categoryId": "0.08446844811924281",
+      "shelfLife": 12,
+      "expiryRequired": true,
+      "description": "",
+      "status": "Active"
+    }
+  ],
+  "flavours": [
+    {
+      "id": "0.49340301893852856",
+      "name": "chocolate",
+      "productId": "0.14261604295801544",
+      "status": "Active"
+    }
+  ],
+  "recipes": [
+    {
+      "id": "0psmw985gwb",
+      "productId": "0.14261604295801544",
+      "flavourId": "0.49340301893852856",
+      "version": "v1",
+      "masterQuantity": 100,
+      "batchSize": 0,
+      "servingSize": "30",
+      "packSize": "",
+      "materials": [
+        {
+          "materialId": "mpc",
+          "quantity": 30,
+          "unit": "kg",
+          "make": "manish"
+        },
+        {
+          "materialId": "sugar",
+          "quantity": 20,
+          "unit": "kg",
+          "make": "madhur"
+        },
+        {
+          "materialId": "cocoa",
+          "quantity": 50,
+          "unit": "kg",
+          "make": "coco town"
+        }
+      ],
+      "packaging": [
+        {
+          "materialId": "sachets",
+          "unit": "Roll",
+          "rollWeightKg": 12,
+          "emptySachetWeightG": 3
+        }
+      ],
+      "boxConfig": {
+        "defaultAssortedPercentage": 0,
+        "defaultFlavouredPercentage": 100,
+        "flavouredBox": {
+          "sachetsPerBox": 1
+        },
+        "assortedBox": {
+          "sachetsPerBox": 1,
+          "allowedFlavourIds": [
+            "0.49340301893852856"
+          ],
+          "composition": {}
+        }
+      }
+    }
+  ],
+  "packagingMaterials": [],
+  "manufacturers": [],
+  "materials": [],
+  "suppliers": [],
+  "customers": [],
+  "purchaseRequisitions": [],
+  "purchaseOrders": [],
+  "goodsReceipts": [],
+  "goodsReceiptRecords": [
+    {
+      "id": "Raw Materials-bqjsgm08we-1786348311669",
+      "sourceType": "Raw Materials",
+      "sourceId": "bqjsgm08we",
+      "materialType": "Raw Materials",
+      "materialName": "cocoa",
+      "inventoryMaterialId": "cocoa",
+      "purchaseQuantity": 200,
+      "unit": "kg",
+      "purchaseDate": "2026-08-12",
+      "receivedQuantity": 200,
+      "qaSampleQuantity": 1,
+      "availableQuantity": 199,
+      "remainingQuantity": 0,
+      "expiryDate": "2026-08-11",
+      "receivedDate": "2026-08-10",
+      "receivedBy": "Yougeshbhai",
+      "remarks": "",
+      "status": "Completed"
+    }
+  ],
+  "materialTesting": [],
+  "materialTestSlips": [
+    {
+      "id": "mts-Raw Materials-bqjsgm08we-1786348311669",
+      "goodsReceiptId": "Raw Materials-bqjsgm08we-1786348311669",
+      "sourceType": "Raw Materials",
+      "sourceId": "bqjsgm08we",
+      "materialType": "Raw Materials",
+      "materialId": "cocoa",
+      "materialName": "cocoa",
+      "receivedQuantity": 200,
+      "qaSampleQuantity": 1,
+      "availableQuantity": 199,
+      "remainingQuantity": 0,
+      "expiryDate": "2026-08-11",
+      "unit": "kg",
+      "receivedDate": "2026-08-10",
+      "receivedBy": "Yougeshbhai",
+      "status": "Test Approved",
+      "qaRemarks": ""
+    }
+  ],
+  "rmInventory": [],
+  "pmInventory": [],
+  "finishedGoods": [],
+  "stockTransactions": [],
+  "inventoryTransactions": [
+    {
+      "id": "grn-bqjsgm08we-1786348311669",
+      "transactionDate": "2026-08-10",
+      "recordedAt": "2026-08-10T07:51:51.671Z",
+      "materialType": "Raw Materials",
+      "materialId": "cocoa",
+      "materialName": "cocoa",
+      "transactionType": "Goods Inward",
+      "quantity": 200,
+      "delta": 200,
+      "unit": "kg",
+      "referenceModule": "Goods Receipt",
+      "createdBy": "Yougeshbhai",
+      "status": "Completed",
+      "referenceId": "bqjsgm08we"
+    },
+    {
+      "id": "qa-bqjsgm08we-1786348311669",
+      "transactionDate": "2026-08-10",
+      "recordedAt": "2026-08-10T07:51:51.671Z",
+      "materialType": "Raw Materials",
+      "materialId": "cocoa",
+      "materialName": "cocoa",
+      "transactionType": "QA Sample Consumption",
+      "quantity": 1,
+      "delta": -1,
+      "unit": "kg",
+      "referenceModule": "Goods Receipt",
+      "createdBy": "Yougeshbhai",
+      "status": "Completed",
+      "referenceId": "bqjsgm08we"
+    },
+    {
+      "id": "issue-cocoa-1786349154611",
+      "transactionDate": "2026-08-10",
+      "recordedAt": "2026-08-10T08:05:54.612Z",
+      "materialType": "Additional Materials",
+      "materialId": "cocoa",
+      "materialName": "cocoa",
+      "batchNumber": "BATCH-COCOA",
+      "transactionType": "Production Issue",
+      "quantity": 199,
+      "delta": -199,
+      "unit": "kg",
+      "referenceModule": "Production Issue",
+      "createdBy": "Yougeshbhai",
+      "status": "Issued",
+      "referenceId": "cocoa"
+    },
+    {
+      "id": "return-cocoa-1786349154612-1786349177075",
+      "transactionDate": "2026-08-10",
+      "recordedAt": "2026-08-10T08:06:17.075Z",
+      "materialType": "Additional Materials",
+      "materialId": "cocoa",
+      "materialName": "cocoa",
+      "batchNumber": "BATCH-COCOA",
+      "transactionType": "Production Return",
+      "quantity": 7,
+      "delta": 7,
+      "unit": "kg",
+      "referenceModule": "Production Return",
+      "createdBy": "Yougeshbhai",
+      "status": "Returned",
+      "referenceId": "cocoa-1786349154612"
+    }
+  ],
+  "productionPlans": [
+    {
+      "id": "report-0psmw985gwb",
+      "productId": "0.14261604295801544",
+      "flavourId": "0.49340301893852856",
+      "recipeId": "0psmw985gwb",
+      "manufacturerId": "",
+      "batch": "REPORT-v1",
+      "mfgDate": "2026-08-10",
+      "quantity": 300,
+      "type": "Normal",
+      "status": "Approved"
+    }
+  ],
+  "productionOrders": [],
+  "productionIssues": [],
+  "productionIssueRecords": [
+    {
+      "id": "cocoa-1786349154612",
+      "materialType": "Additional Materials",
+      "materialId": "cocoa",
+      "materialName": "cocoa",
+      "availableQuantity": 199,
+      "issuedQuantity": 199,
+      "unit": "kg",
+      "batchNumber": "BATCH-COCOA",
+      "fifoBatches": "Raw Materials-bqjsgm08we-1786348311669",
+      "issueDate": "2026-08-10",
+      "issuedBy": "Yougeshbhai",
+      "remarks": "",
+      "remainingQuantity": 0,
+      "status": "Issued"
+    }
+  ],
+  "productionReturns": [],
+  "productionReturnRecords": [
+    {
+      "id": "cocoa-1786349154612-1786349177075",
+      "issueId": "cocoa-1786349154612",
+      "materialType": "Additional Materials",
+      "materialId": "cocoa",
+      "materialName": "cocoa",
+      "batchNumber": "BATCH-COCOA",
+      "issuedQuantity": 199,
+      "returnedQuantity": 7,
+      "actualConsumption": 192,
+      "returnDate": "2026-08-10",
+      "returnedBy": "Yougeshbhai",
+      "returnReason": "unused",
+      "remarks": "",
+      "unit": "kg",
+      "remainingReturnableQuantity": 192,
+      "status": "Partially Returned"
+    }
+  ],
+  "productionOutput": [],
+  "rndSampleRequirements": [],
+  "rndSampleInventory": [],
+  "sampleDispatchRecords": [],
+  "sampleReceiptInventory": [],
+  "rndBaseFormulas": [],
+  "rndTrials": [],
+  "rndFormulaVersions": [],
+  "trialWorksheets": [],
+  "formulaLibrary": [],
+  "reports": [],
+  "dashboard": [],
+  "vendors": [],
+  "vendorHistoryRecords": [],
+  "productionCalculations": [
+    {
+      "recipeId": "0psmw985gwb",
+      "productId": "0.14261604295801544",
+      "flavourId": "0.49340301893852856",
+      "productionKg": 300,
+      "finishedSachets": 10000,
+      "flavouredRatio": 20,
+      "assortedRatio": 80,
+      "flavouredSachets": 2000,
+      "assortedSachets": 8000,
+      "sachetsPerFlavouredBox": 10,
+      "flavouredBoxes": 200
+    }
+  ],
+  "requirementReportSelection": {
+    "selectedRecipeIds": [],
+    "productionQtyByRecipe": {}
+  },
+  "assortedBoxCalculations": [],
+  "rmPurchaseRecords": [
+    {
+      "purchasedQuantity": "200",
+      "expiryDate": "2026-08-11",
+      "pricePerUnit": "195",
+      "supplierName": "coco town",
+      "poNumber": "001",
+      "expectedDeliveryDateTime": "2026-08-12T13:20",
+      "receiverLocation": "warehouse",
+      "documents": "assignment 1 - mongodb_ch 1.pdf",
+      "remarks": "",
+      "status": "Ordered",
+      "id": "bqjsgm08we",
+      "materialId": "cocoa",
+      "materialName": "cocoa",
+      "requiredQuantity": 150,
+      "unit": "kg",
+      "totalPrice": 39000
+    }
+  ],
+  "sachetPurchaseRecords": [],
+  "boxPurchaseRecords": []
+}

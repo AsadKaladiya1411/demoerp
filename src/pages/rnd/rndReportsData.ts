@@ -1,9 +1,4 @@
-import {
-  getBaseFormulas,
-  getFormulaVersions,
-  getSampleInventoryRecords,
-  getTrialRecords,
-} from './rndStore';
+import type { FormulaVersionRecord, SampleInventoryRecord, SavedBaseFormulaRecord, SavedTrialRecord } from './rndStore';
 
 export type FormulaLibraryReportRow = {
   product: string;
@@ -65,12 +60,7 @@ export type ReportMetrics = {
   pendingAssessments: number;
 };
 
-export const getRndMetrics = (): ReportMetrics => {
-  const baseFormulas = getBaseFormulas();
-  const formulaVersions = getFormulaVersions();
-  const trials = getTrialRecords();
-  const sampleItems = getSampleInventoryRecords();
-
+export const getRndMetrics = (baseFormulas: SavedBaseFormulaRecord[], formulaVersions: FormulaVersionRecord[], trials: SavedTrialRecord[], sampleItems: SampleInventoryRecord[]): ReportMetrics => {
   const totalProducts = new Set([
     ...baseFormulas.map(record => record.productId),
     ...formulaVersions.map(record => record.productId),
@@ -88,25 +78,22 @@ export const getRndMetrics = (): ReportMetrics => {
   };
 };
 
-export const getFormulaStatusChartData = () => {
-  const formulaVersions = getFormulaVersions();
+export const getFormulaStatusChartData = (formulaVersions: FormulaVersionRecord[]) => {
   const statuses = ['Draft', 'Under Testing', 'Approved', 'Current', 'Archived'] as const;
   return statuses.map(status => ({ name: status, value: formulaVersions.filter(record => record.status === status).length }));
 };
 
-export const getTrialStatusChartData = () => {
-  const trials = getTrialRecords();
+export const getTrialStatusChartData = (trials: SavedTrialRecord[]) => {
   const statuses = ['Draft', 'In Progress', 'Completed', 'Selected', 'Rejected'] as const;
   return statuses.map(status => ({ name: status, value: trials.filter(record => record.status === status).length }));
 };
 
-export const getSampleStatusChartData = () => {
-  const sampleItems = getSampleInventoryRecords();
+export const getSampleStatusChartData = (sampleItems: SampleInventoryRecord[]) => {
   const statuses = ['Available', 'Low Stock', 'Depleted'] as const;
   return statuses.map(status => ({ name: status, value: sampleItems.filter(record => record.status === status).length }));
 };
 
-export const buildFormulaLibraryReportRows = (): FormulaLibraryReportRow[] => getFormulaVersions().map(record => ({
+export const buildFormulaLibraryReportRows = (formulaVersions: FormulaVersionRecord[]): FormulaLibraryReportRow[] => formulaVersions.map(record => ({
   product: record.productName,
   formulaId: record.formulaId,
   version: record.version,
@@ -116,7 +103,7 @@ export const buildFormulaLibraryReportRows = (): FormulaLibraryReportRow[] => ge
   trialReference: record.trialReference,
 }));
 
-export const buildTrialHistoryReportRows = (): TrialHistoryReportRow[] => getTrialRecords().map(record => ({
+export const buildTrialHistoryReportRows = (trials: SavedTrialRecord[]): TrialHistoryReportRow[] => trials.map(record => ({
   trialId: record.trialId,
   trialNumber: record.trialNumber,
   baseFormula: record.baseFormulaName,
@@ -128,7 +115,7 @@ export const buildTrialHistoryReportRows = (): TrialHistoryReportRow[] => getTri
   totalWeight: record.totalWeight,
 }));
 
-export const buildSampleInventoryReportRows = (): SampleInventoryReportRow[] => getSampleInventoryRecords().map(record => ({
+export const buildSampleInventoryReportRows = (sampleItems: SampleInventoryRecord[]): SampleInventoryReportRow[] => sampleItems.map(record => ({
   sampleId: record.sampleId,
   rawMaterial: record.rawMaterialName,
   manufacturer: record.manufacturer,
@@ -140,7 +127,7 @@ export const buildSampleInventoryReportRows = (): SampleInventoryReportRow[] => 
   status: record.status,
 }));
 
-export const buildAssessmentReportRows = (): AssessmentReportRow[] => getTrialRecords()
+export const buildAssessmentReportRows = (trials: SavedTrialRecord[]): AssessmentReportRow[] => trials
   .filter(record => record.assessment)
   .map(record => ({
     trialId: record.trialId,

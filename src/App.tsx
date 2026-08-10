@@ -1,4 +1,5 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import React from 'react';
+import { BrowserRouter, Navigate, Routes, Route } from 'react-router-dom';
 import { AppLayout } from './components/layout/AppLayout';
 import { ProtectedRoute } from '@/auth/ProtectedRoute';
 import LoginPage from './pages/Login';
@@ -25,6 +26,7 @@ import { GoodsReceipt } from './pages/employee-c/GoodsReceipt';
 import { ProductionIssue } from './pages/employee-c/ProductionIssue';
 import { ProductionReturn } from './pages/employee-c/ProductionReturn';
 import { PendingMaterialTests } from './pages/employee-d/PendingMaterialTests';
+import { PendingSampleReceipts } from './pages/employee-a/PendingSampleReceipts';
 import { VendorManagement } from './pages/masters/VendorManagement';
 import { RndDashboard } from './pages/rnd/RndDashboard';
 import { SampleInventory } from './pages/rnd/SampleInventory';
@@ -35,9 +37,18 @@ import { TrialHistory } from './pages/rnd/TrialHistory';
 import { FormulaLibrary } from './pages/rnd/FormulaLibrary';
 import { RndReports } from './pages/rnd/RndReports';
 
+class AppErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
+  state = { hasError: false };
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(error: Error) { console.error('Application render error:', error); }
+  render() {
+    return this.state.hasError ? <div className="min-h-screen flex items-center justify-center bg-background text-foreground">Unable to load this page. Please refresh and try again.</div> : this.props.children;
+  }
+}
+
 function App() {
   return (
-    <BrowserRouter>
+    <AppErrorBoundary><BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
@@ -55,6 +66,7 @@ function App() {
           <Route path="recipes" element={<RequirePermission permission="recipes"><RecipeManagement /></RequirePermission>} />
           
           <Route path="employee-b/rm-requirement" element={<RequirePermission permission="employeeBRm"><RmRequirement /></RequirePermission>} />
+          <Route path="employee-a/pending-sample-receipts" element={<RequirePermission permission="employeeASampleInventory"><PendingSampleReceipts /></RequirePermission>} />
           <Route path="employee-b/pm-requirement" element={<RequirePermission permission="employeeBPm"><PmRequirement /></RequirePermission>} />
           <Route path="employee-b/rnd-sample-requirement" element={<RequirePermission permission="employeeBSampleRequirement"><RndSampleRequirement /></RequirePermission>} />
           <Route path="employee-b/master-report" element={<RequirePermission permission="employeeBMasterReport"><EmployeeBMasterReport /></RequirePermission>} />
@@ -78,8 +90,9 @@ function App() {
           <Route path="rnd/formula-library" element={<RequirePermission permission="rnd"><FormulaLibrary /></RequirePermission>} />
           <Route path="rnd/reports" element={<RequirePermission permission="rnd"><RndReports /></RequirePermission>} />
         </Route>
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-    </BrowserRouter>
+    </BrowserRouter></AppErrorBoundary>
   );
 }
 

@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, type WheelEvent } from 'react';
+import { useMemo, useState, type WheelEvent } from 'react';
 import { motion } from 'framer-motion';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -8,12 +8,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useAuth } from '@/context/AuthContext';
+import { useErpData } from '@/context/ErpContext';
 import { PackageOpen } from 'lucide-react';
-import { recordSampleDispatch } from '../employee-a/sampleInventoryStore';
 import {
-  getRndSampleRequirements,
-  updateRndSampleRequirementStatus,
-  subscribeRndRequirementStore,
+  type SamplePurchaseRecord,
 } from './rndRequirementStore';
 
 type RequirementStatus = 'Pending' | 'Purchased' | 'Received' | 'Sent to R&D';
@@ -28,36 +26,6 @@ type SampleRequirementRow = {
   requiredQuantity: number;
   unit: string;
   status: RequirementStatus;
-};
-
-type SamplePurchaseRecord = {
-  id: string;
-  requirementId: string;
-  requirementDate: string;
-  requestedBy: string;
-  materialName: string;
-  requiredQuantity: number;
-  unit: string;
-  purchaseDate: string;
-  poNumber: string;
-  supplier: string;
-  purchasedQuantity: string;
-  pricePerUnit: string;
-  expectedDeliveryDate: string;
-  remarks: string;
-  totalAmount: number;
-  status: 'Purchased' | 'Received' | 'Sent to R&D';
-  receipt?: {
-    receivedQuantity: string;
-    receivedDate: string;
-    invoiceNumber: string;
-    remarks: string;
-  };
-  dispatch?: {
-    dispatchDate: string;
-    dispatchedBy: string;
-    remarks: string;
-  };
 };
 
 type PurchaseForm = {
@@ -95,10 +63,7 @@ const createEmptyPurchaseForm = (): PurchaseForm => ({
   remarks: '',
 });
 
-const _initialRequirementRows: SampleRequirementRow[] = [];
-void _initialRequirementRows;
-
-const mapStoreToRow = (r: any): SampleRequirementRow => ({
+const mapStoreToRow = (r: { requirementId: string; requestDate: string; requestedBy: string; materialName: string; quantity: number; unit: string; status: RequirementStatus }): SampleRequirementRow => ({
   id: r.requirementId,
   requirementDate: r.requestDate,
   requestedBy: r.requestedBy,
@@ -133,8 +98,9 @@ const formatMoney = (value: number) => value.toFixed(2);
 
 export function RndSampleRequirement() {
   const { currentUser } = useAuth();
-  const [rows, setRows] = useState<SampleRequirementRow[]>(() => getRndSampleRequirements().map(mapStoreToRow));
-  const [purchaseRecords, setPurchaseRecords] = useState<SamplePurchaseRecord[]>([]);
+  const { rndSampleRequirements, saveRndSampleRequirement, sampleDispatchRecords, saveSampleDispatch } = useErpData();
+  const rows = rndSampleRequirements.map(mapStoreToRow);
+  const purchaseRecords = rndSampleRequirements.flatMap(requirement => requirement.purchase ? [requirement.purchase] : []);
   const [purchaseMode, setPurchaseMode] = useState<PurchaseMode>('create');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingRequirementId, setEditingRequirementId] = useState('');
@@ -144,10 +110,6 @@ export function RndSampleRequirement() {
   const canEdit = currentUser.role === 'Employee B' || currentUser.role === 'Boss';
   const canView = currentUser.role === 'Boss' || canEdit;
   const displayRows = canView ? rows : [];
-  useEffect(() => {
-    const unsubscribe = subscribeRndRequirementStore(() => setRows(getRndSampleRequirements().map(mapStoreToRow)));
-    return unsubscribe;
-  }, []);
   const selectedRequirement = useMemo(() => rows.find(row => row.id === editingRequirementId) || null, [editingRequirementId, rows]);
   const selectedPurchase = useMemo(() => purchaseRecords.find(record => record.requirementId === editingRequirementId) || null, [editingRequirementId, purchaseRecords]);
   const purchaseTotalAmount = (Number(form.purchasedQuantity) || 0) * (Number(form.pricePerUnit) || 0);
@@ -273,8 +235,8 @@ export function RndSampleRequirement() {
       status: 'Purchased',
     };
 
-    setPurchaseRecords(previous => [payload, ...previous.filter(record => record.requirementId !== currentRequirement.id)]);
-    updateRndSampleRequirementStatus(currentRequirement.id, 'Purchased');
+    const requirement = rndSampleRequirements.find(record => record.requirementId === currentRequirement.id);
+    if (requirement) saveRndSampleRequirement({ ...requirement, status: 'Purchased', purchase: payload });
     setMessage('Purchase record saved.');
     setPurchaseMode('view');
     setForm({
@@ -309,15 +271,14 @@ export function RndSampleRequirement() {
       remarks: 'Auto-dispatch after receive',
     };
 
-    setPurchaseRecords(previous => previous.map(record => (
-      record.requirementId === purchase.requirementId
-        ? { ...record, status: 'Sent to R&D', receipt: receiptPayload, dispatch: dispatchPayload }
-        : record
-    )));
-
-    updateRndSampleRequirementStatus(purchase.requirementId, 'Sent to R&D');
-
-    recordSampleDispatch({
+    const updatedPurchase: SamplePurchaseRecord = { ...purchase, status: 'Sent to R&D', receipt: receiptPayload, dispatch: dispatchPayload };
+    const requirement = rndSampleRequirements.find(record => record.requirementId === purchase.requirementId);
+    if (requirement) saveRndSampleRequirement({ ...requirement, status: 'Sent to R&D', purchase: updatedPurchase });
+    const existingDispatch = sampleDispatchRecords.find(record => record.requirementId === purchase.requirementId);
+    const dispatchNumber = sampleDispatchRecords.length + 1;
+    saveSampleDispatch({
+      id: existingDispatch?.id || `DSP-${String(dispatchNumber).padStart(4, '0')}`,
+      dispatchId: existingDispatch?.dispatchId || `DSP-${String(dispatchNumber).padStart(4, '0')}`,
       dispatchDate: todayString(),
       poNumber: purchase.poNumber,
       requirementId: purchase.requirementId,
@@ -326,6 +287,8 @@ export function RndSampleRequirement() {
       unit: purchase.unit,
       dispatchedBy: currentUser.name,
       dispatchRemarks: 'Auto-dispatch from Parthbhai after receive',
+      status: 'Sent to R&D',
+      receipt: existingDispatch?.receipt,
     });
 
     setMessage('Material marked received and dispatched to R&D.');

@@ -1,4 +1,4 @@
-import { useMemo, useState, type WheelEvent } from 'react';
+import { useEffect, useMemo, useState, type WheelEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -7,7 +7,6 @@ import { useAuth } from '@/context/AuthContext';
 import { useErpData } from '@/context/ErpContext';
 import { Plus, Trash2, Microscope, Save } from 'lucide-react';
 import { calculateBaseFormulaSummary, createIngredientDraft, todayString, type BaseFormulaIngredientDraft } from './baseFormulaUtils';
-import { getBaseFormulas, getNextBaseFormulaNumber, saveBaseFormula } from './rndStore';
 
 type SavedBaseFormula = {
   id: string;
@@ -34,10 +33,10 @@ const preventNumberWheel = (event: WheelEvent<HTMLInputElement>) => {
 
 export function BaseFormulation() {
   const { currentUser } = useAuth();
-  const { materials } = useErpData();
+  const { materials, rndBaseFormulas, saveRndBaseFormula } = useErpData();
   const _rawMaterials = useMemo(() => materials.filter(material => material.type === 'Raw Material'), [materials]);
   void _rawMaterials;
-  const [savedFormulas, setSavedFormulas] = useState<SavedBaseFormula[]>(() => getBaseFormulas().map(record => ({
+  const savedFormulas: SavedBaseFormula[] = rndBaseFormulas.map(record => ({
     id: record.id,
     productName: record.productName,
     date: record.date,
@@ -49,14 +48,20 @@ export function BaseFormulation() {
     totalCost: record.totalCost,
     totalProtein: record.totalProtein,
     ingredientCount: record.ingredientCount,
-  })));
-  const [formulaId, setFormulaId] = useState(() => `BF-${getNextBaseFormulaNumber()}`);
+  }));
+  const [formulaId, setFormulaId] = useState('BF-0001');
   const [productName, setProductName] = useState('');
   const [formulaDate, setFormulaDate] = useState(todayString());
   const [batchSize, setBatchSize] = useState('');
   const [servingSize, setServingSize] = useState('');
   const [ingredients, setIngredients] = useState<BaseFormulaIngredientDraft[]>(createInitialIngredients);
   const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    if (formulaId !== 'BF-0001' || rndBaseFormulas.length === 0) return;
+    const nextNumber = rndBaseFormulas.reduce((maximum, formula) => Math.max(maximum, Number(formula.id.replace(/\D/g, '')) || 0), 0) + 1;
+    setFormulaId(`BF-${String(nextNumber).padStart(4, '0')}`);
+  }, [formulaId, rndBaseFormulas]);
 
   const canMutate = currentUser.role === 'Employee A';
   const batchSizeValue = Number(batchSize || 0);
@@ -137,7 +142,7 @@ export function BaseFormulation() {
       ingredientCount: validIngredients.length,
     };
 
-    saveBaseFormula({
+    saveRndBaseFormula({
       id: savedRecord.id,
       baseFormulaNumber: savedRecord.id,
       productId: trimmedProductName,
@@ -166,21 +171,8 @@ export function BaseFormulation() {
       }),
     });
 
-    setSavedFormulas(getBaseFormulas().map(record => ({
-      id: record.id,
-      productName: record.productName,
-      date: record.date,
-      batchSize: record.batchSize,
-      servingSize: record.servingSize,
-      proteinPerServing: record.proteinPerServing,
-      rmCostPerServing: record.rmCostPerServing,
-      basePercentage: record.basePercentage,
-      totalCost: record.totalCost,
-      totalProtein: record.totalProtein,
-      ingredientCount: record.ingredientCount,
-    })));
     setMessage(`Base Formula ${formulaId} saved.`);
-    clearForm(getBaseFormulas().length + 1);
+    clearForm(rndBaseFormulas.length + 2);
   };
 
   return (

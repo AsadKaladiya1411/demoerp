@@ -32,6 +32,7 @@ export function TopNav() {
           <User className="h-5 w-5" />
           <span className="sr-only">Profile</span>
         </Button>
+        
         <Button
           variant="ghost"
           size="icon"

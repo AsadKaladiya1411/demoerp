@@ -53,16 +53,17 @@ export function RecipeManagement() {
     () => flavours.filter(flavour => flavour.productId === (productionRecipe?.productId || selectedProduct)),
     [flavours, productionRecipe?.productId, selectedProduct]
   );
+  const planningProductFlavourIds = planningProductFlavours.map(flavour => flavour.id).join('|');
 
   useEffect(() => {
     setPlanningAssortedComposition(prev => {
       const next: Record<string, string> = {};
-      planningProductFlavours.forEach(flavour => {
-        next[flavour.id] = prev[flavour.id] ?? (flavour.id === (productionRecipe?.flavourId || selectedFlavour) ? '1' : '0');
+      planningProductFlavourIds.split('|').filter(Boolean).forEach(flavourId => {
+        next[flavourId] = prev[flavourId] ?? (flavourId === (productionRecipe?.flavourId || selectedFlavour) ? '1' : '0');
       });
       return next;
     });
-  }, [planningProductFlavours, productionRecipe?.flavourId, selectedFlavour]);
+  }, [planningProductFlavourIds, productionRecipe?.flavourId, selectedFlavour]);
 
   const totalQuantity = materialsRows.reduce((sum, row) => sum + (Number(row.quantity) || 0), 0);
   const canSave = totalQuantity === 100 && selectedProduct && selectedFlavour;

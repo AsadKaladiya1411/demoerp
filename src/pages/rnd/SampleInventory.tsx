@@ -10,26 +10,21 @@ import { useAuth } from '@/context/AuthContext';
 import { useErpData } from '@/context/ErpContext';
 import { ArrowDownToLine, History, Microscope, SlidersHorizontal } from 'lucide-react';
 import {
-  adjustSampleQuantity,
-  getSampleInventoryRecords,
-  issueSample,
-  seedSampleInventoryRecords,
   type SampleInventoryRecord,
 } from './rndStore';
-import { createRndSampleRequirement } from '../employee-b/rndRequirementStore';
 
 type AdjustmentMode = 'Increase' | 'Decrease';
 
 const today = () => new Date().toISOString().slice(0, 10);
 
 const formatQuantity = (value: number) => `${value > 0 ? '+' : ''}${value}`;
+const sampleStatus = (balance: number): SampleInventoryRecord['status'] => balance <= 0 ? 'Depleted' : balance < 10 ? 'Low Stock' : 'Available';
 
 export function SampleInventory() {
   const { currentUser } = useAuth();
-  const { materials } = useErpData();
+  const { materials, rndSampleInventory: inventory, saveRndSampleInventory, rndSampleRequirements, saveRndSampleRequirement } = useErpData();
   const _rawMaterials = useMemo(() => materials.filter(material => material.type === 'Raw Material'), [materials]);
   void _rawMaterials;
-  const [inventory, setInventory] = useState<SampleInventoryRecord[]>(() => seedSampleInventoryRecords(materials));
   const [issueOpen, setIssueOpen] = useState(false);
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -54,9 +49,6 @@ export function SampleInventory() {
   const canMutate = currentUser.role === 'Employee A';
 
   const historyRecord = activeRecord;
-
-  const refreshInventory = () => setInventory(getSampleInventoryRecords());
-
 
   const openRequestDialog = () => {
     setReqMaterialName('');
@@ -104,8 +96,14 @@ export function SampleInventory() {
       return;
     }
 
-    createRndSampleRequirement({
+    const nextNumber = rndSampleRequirements.length + 1;
+    const requirementId = `RNRQ-${String(nextNumber).padStart(4, '0')}`;
+    saveRndSampleRequirement({
+      id: requirementId,
+      requirementId,
       requestedBy: currentUser.name,
+      requestDate: today(),
+      status: 'Pending',
       materialName,
       quantity: qty,
       unit: reqUnit || '',
@@ -131,8 +129,13 @@ export function SampleInventory() {
       return;
     }
 
-    issueSample(activeRecord.sampleId, quantity, issueDate, issueRemarks);
-    refreshInventory();
+    const balance = activeRecord.currentBalance - quantity;
+    saveRndSampleInventory({
+      ...activeRecord,
+      currentBalance: balance,
+      status: sampleStatus(balance),
+      history: [{ id: `hist-${Date.now()}`, date: issueDate, action: 'Issue Sample', quantity: -quantity, balance, remarks: issueRemarks.trim() || 'Sample issued' }, ...(activeRecord.history || [])],
+    });
 
     setIssueOpen(false);
     setActiveRecord(null);
@@ -151,8 +154,14 @@ export function SampleInventory() {
       return;
     }
 
-    adjustSampleQuantity(activeRecord.sampleId, quantity, adjustMode, adjustDate, adjustRemarks);
-    refreshInventory();
+    const delta = adjustMode === 'Increase' ? quantity : -quantity;
+    const balance = Math.max(0, activeRecord.currentBalance + delta);
+    saveRndSampleInventory({
+      ...activeRecord,
+      currentBalance: balance,
+      status: sampleStatus(balance),
+      history: [{ id: `hist-${Date.now()}`, date: adjustDate, action: 'Adjust Quantity', quantity: delta, balance, remarks: adjustRemarks.trim() || `${adjustMode} adjustment` }, ...(activeRecord.history || [])],
+    });
 
     setAdjustOpen(false);
     setActiveRecord(null);

@@ -5,12 +5,10 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useAuth } from '@/context/AuthContext';
+import { useErpData } from '@/context/ErpContext';
 import { Microscope, CopyPlus, Plus, Save } from 'lucide-react';
 import { calculateTrialSummary, createTrialIngredientsFromBaseFormula, todayString } from './trialWorksheetUtils';
 import {
-  getBaseFormulas,
-  getTrialRecords,
-  saveTrialRecord,
   type SavedBaseFormulaRecord,
   type SavedTrialRecord,
   type TrialIngredientRecord,
@@ -46,18 +44,15 @@ const createDraft = (baseFormula: SavedBaseFormulaRecord | null, trialIndex: num
 
 export function TrialWorksheet() {
   const { currentUser } = useAuth();
-  const [baseFormulas] = useState<SavedBaseFormulaRecord[]>(() => getBaseFormulas());
-  const [savedTrials, setSavedTrials] = useState<SavedTrialRecord[]>(() => getTrialRecords());
-  const [trialDraft, setTrialDraft] = useState<TrialDraft>(() => createDraft(getBaseFormulas()[0] || null, getTrialRecords().length + 1));
+  const { rndBaseFormulas: baseFormulas, rndTrials: savedTrials, saveRndTrial } = useErpData();
+  const [trialDraft, setTrialDraft] = useState<TrialDraft>(() => createDraft(null, 1));
   const [message, setMessage] = useState('');
 
   const canMutate = currentUser.role === 'Employee A';
   const selectedBaseFormula = useMemo(() => baseFormulas.find(record => record.id === trialDraft.baseFormulaId) || null, [baseFormulas, trialDraft.baseFormulaId]);
   const summary = useMemo(() => calculateTrialSummary(trialDraft.ingredients, selectedBaseFormula?.batchSize || 0), [selectedBaseFormula?.batchSize, trialDraft.ingredients]);
 
-  const nextTrialIndex = () => getTrialRecords().length + 1;
-
-  const refreshTrials = () => setSavedTrials(getTrialRecords());
+  const nextTrialIndex = () => savedTrials.length + 1;
 
   const updateIngredient = (id: string, trialQuantity: string) => {
     setTrialDraft(previous => ({
@@ -150,8 +145,7 @@ export function TrialWorksheet() {
       ingredients: trialDraft.ingredients.map(ingredient => ({ ...ingredient })),
     };
 
-    saveTrialRecord(nextTrial);
-    refreshTrials();
+    saveRndTrial(nextTrial);
     setMessage(`Trial ${trialDraft.trialId} saved.`);
 
     const nextBaseFormula = baseFormulas.find(record => record.id === trialDraft.baseFormulaId) || null;

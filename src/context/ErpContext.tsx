@@ -1,5 +1,10 @@
-import React, { createContext, useCallback, useEffect, useMemo, useContext, useState, type ReactNode } from 'react';
+import React, { createContext, useCallback, useEffect, useContext, useRef, useState, type ReactNode } from 'react';
+import { useAuth } from '@/auth/authContext';
+import { api, apiBase } from '@/lib/api';
 import productionLib, { MASTER_FORMULA_GRAMS, type ProductionSummary, type RecipeBoxConfig } from '@/lib/production';
+import type { FormulaVersionRecord, SampleInventoryRecord as RndSampleInventoryRecord, SavedBaseFormulaRecord, SavedTrialRecord } from '@/pages/rnd/rndStore';
+import type { RndSampleRequirementRecord } from '@/pages/employee-b/rndRequirementStore';
+import type { SampleDispatchRecord, SampleInventoryRecord as SampleReceiptInventoryRecord } from '@/pages/employee-a/sampleInventoryStore';
 
 export { MASTER_FORMULA_GRAMS };
 export type { ProductionSummary };
@@ -317,27 +322,8 @@ export interface InventoryTransactionRecord {
   referenceId: string;
 }
 
-type ErpPersistedState = {
-  categories: Category[];
-  products: Product[];
-  flavours: Flavour[];
-  manufacturers: Manufacturer[];
-  materials: Material[];
-  vendors: Vendor[];
-  vendorHistoryRecords: VendorHistoryRecord[];
-  recipes: Recipe[];
-  productionPlans: ProductionPlan[];
-  productionCalculations: ProductionCalculation[];
-  requirementReportSelection: RequirementReportSelection;
-  assortedBoxCalculations: AssortedBoxCalculation[];
-  rmPurchaseRecords: EmployeeBRmPurchaseRecord[];
-  sachetPurchaseRecords: EmployeeBSachetPurchaseRecord[];
-  boxPurchaseRecords: EmployeeBBoxPurchaseRecord[];
-  goodsReceiptRecords: GoodsReceiptRecord[];
-  productionIssueRecords: ProductionIssueRecord[];
-  productionReturnRecords: ProductionReturnRecord[];
-  inventoryTransactions: InventoryTransactionRecord[];
-  materialTestSlips: MaterialTestSlip[];
+const notifyDeleteBlocked = (message: string) => {
+  window.alert(message);
 };
 
 interface ErpContextType {
@@ -361,6 +347,13 @@ interface ErpContextType {
   productionReturnRecords: ProductionReturnRecord[];
   inventoryTransactions: InventoryTransactionRecord[];
   materialTestSlips: MaterialTestSlip[];
+  rndSampleRequirements: RndSampleRequirementRecord[];
+  sampleDispatchRecords: SampleDispatchRecord[];
+  sampleReceiptInventory: SampleReceiptInventoryRecord[];
+  rndBaseFormulas: SavedBaseFormulaRecord[];
+  rndTrials: SavedTrialRecord[];
+  rndFormulaVersions: FormulaVersionRecord[];
+  rndSampleInventory: RndSampleInventoryRecord[];
   
   // Basic setter functions for prototype interactivity
   addCategory: (c: Category) => void;
@@ -395,6 +388,13 @@ interface ErpContextType {
   saveMaterialTestDecision: (input: SaveMaterialTestDecisionInput) => void;
   saveProductionIssue: (input: SaveProductionIssueInput) => void;
   saveProductionReturn: (input: SaveProductionReturnInput) => void;
+  saveRndSampleRequirement: (record: RndSampleRequirementRecord) => void;
+  saveSampleDispatch: (record: SampleDispatchRecord) => void;
+  saveSampleReceiptInventory: (record: SampleReceiptInventoryRecord) => void;
+  saveRndBaseFormula: (record: SavedBaseFormulaRecord) => void;
+  saveRndTrial: (record: SavedTrialRecord) => void;
+  saveRndFormulaVersion: (record: FormulaVersionRecord) => void;
+  saveRndSampleInventory: (record: RndSampleInventoryRecord) => void;
   generateProductionSummary: (recipeId: string, productionKg: number, boxUnits?: number) => ProductionSummary | null;
 }
 
@@ -439,123 +439,200 @@ const defaultMaterials: Material[] = [];
 const defaultVendors: Vendor[] = [];
 const defaultVendorHistoryRecords: VendorHistoryRecord[] = [];
 
-const LEGACY_ERP_STORAGE_KEYS = ['jolly-erp-state', 'jolly-erp-state-v2'];
-const ERP_STORAGE_KEY = 'jolly-erp-state-v3';
-
 const normalizeRecipeMaterialUnits = (recipe: Recipe): Recipe => ({
   ...recipe,
-  materials: recipe.materials.map(material => ({
+  materials: Array.isArray(recipe.materials) ? recipe.materials.map(material => ({
     ...material,
     unit: material.unit === '%' ? 'kg' : material.unit || 'kg',
-  })),
+  })) : [],
 });
 
-const readPersistedState = (): Partial<ErpPersistedState> | null => {
-  if (typeof window === 'undefined') return null;
-  try {
-    LEGACY_ERP_STORAGE_KEYS.forEach(key => window.localStorage.removeItem(key));
-    const raw = window.localStorage.getItem(ERP_STORAGE_KEY);
-    if (!raw) return null;
-    const state = JSON.parse(raw) as Partial<ErpPersistedState>;
-    return {
-      ...state,
-      recipes: state.recipes?.map(normalizeRecipeMaterialUnits),
-    };
-  } catch {
-    return null;
-  }
+const COLLECTIONS = [
+  'categories','products','flavours','manufacturers','materials','vendors','vendorHistoryRecords','recipes','productionPlans','productionCalculations','requirementReportSelection','assortedBoxCalculations','rmPurchaseRecords','sachetPurchaseRecords','boxPurchaseRecords','goodsReceiptRecords','productionIssueRecords','productionReturnRecords','inventoryTransactions','materialTestSlips','rndSampleRequirements','sampleDispatchRecords','sampleReceiptInventory','rndBaseFormulas','rndTrials','rndFormulaVersions','rndSampleInventory'
+];
+
+type StateOperation =
+  | { type: 'upsert'; collection: string; key: string; item: Record<string, unknown> }
+  | { type: 'delete'; collection: string; key: string }
+  | { type: 'set'; collection: string; value: unknown };
+
+const recordKey = (collection: string, item: unknown) => {
+  const candidate = item && typeof item === 'object' ? item as Record<string, unknown> : {};
+  const keyField = collection === 'productionCalculations' ? 'recipeId' : collection === 'assortedBoxCalculations' ? 'productId' : 'id';
+  return String(candidate[keyField] ?? '');
 };
 
-const writePersistedState = (state: ErpPersistedState) => {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(ERP_STORAGE_KEY, JSON.stringify(state));
-  } catch {
-    // Ignore storage failures in the app.
+const cloneState = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+
+const diffCollection = (collection: string, previous: unknown, next: unknown): StateOperation[] => {
+  if (collection === 'requirementReportSelection') {
+    return JSON.stringify(previous) === JSON.stringify(next) ? [] : [{ type: 'set', collection, value: next }];
   }
+  const previousRows = Array.isArray(previous) ? previous : [];
+  const nextRows = Array.isArray(next) ? next : [];
+  const previousByKey = new Map(previousRows.map(item => [recordKey(collection, item), item]));
+  const nextByKey = new Map(nextRows.map(item => [recordKey(collection, item), item]));
+  const operations: StateOperation[] = [];
+  nextByKey.forEach((item, key) => {
+    if (!key) return;
+    if (JSON.stringify(previousByKey.get(key)) !== JSON.stringify(item)) operations.push({ type: 'upsert', collection, key, item: item as Record<string, unknown> });
+  });
+  previousByKey.forEach((_item, key) => {
+    if (key && !nextByKey.has(key)) operations.push({ type: 'delete', collection, key });
+  });
+  return operations;
 };
 
 const ErpContext = createContext<ErpContextType | undefined>(undefined);
 
 export const ErpProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const persistedState = useMemo(() => readPersistedState(), []);
-
-  const [categories, setCategories] = useState<Category[]>(() => persistedState?.categories ?? defaultCategories);
-  const [products, setProducts] = useState<Product[]>(() => persistedState?.products ?? defaultProducts);
-  const [flavours, setFlavours] = useState<Flavour[]>(() => persistedState?.flavours ?? defaultFlavours);
+  const { isAuthenticated } = useAuth();
+  const [categories, setCategories] = useState<Category[]>(() => defaultCategories);
+  const [products, setProducts] = useState<Product[]>(() => defaultProducts);
+  const [flavours, setFlavours] = useState<Flavour[]>(() => defaultFlavours);
   const updateManufacturer = (updated: Manufacturer) =>
   setManufacturers(prev =>
     prev.map(m => (m.id === updated.id ? updated : m))
   );
 
-  const [manufacturers, setManufacturers] = useState<Manufacturer[]>(() => persistedState?.manufacturers ?? defaultManufacturers);
-  const [materials, setMaterials] = useState<Material[]>(() => persistedState?.materials ?? defaultMaterials);
-  const [vendors, setVendors] = useState<Vendor[]>(() => persistedState?.vendors ?? defaultVendors);
-  const [vendorHistoryRecords, setVendorHistoryRecords] = useState<VendorHistoryRecord[]>(() => persistedState?.vendorHistoryRecords ?? defaultVendorHistoryRecords);
-  const [recipes, setRecipes] = useState<Recipe[]>(() => persistedState?.recipes ?? defaultRecipes);
-  const [productionPlans, setProductionPlans] = useState<ProductionPlan[]>(() => persistedState?.productionPlans ?? defaultProductionPlans);
-  const [productionCalculations, setProductionCalculations] = useState<ProductionCalculation[]>(() => persistedState?.productionCalculations ?? defaultProductionCalculations);
-  const [requirementReportSelection, setRequirementReportSelection] = useState<RequirementReportSelection>(() => persistedState?.requirementReportSelection ?? defaultRequirementReportSelection);
-  const [assortedBoxCalculations, setAssortedBoxCalculations] = useState<AssortedBoxCalculation[]>(() => persistedState?.assortedBoxCalculations ?? defaultAssortedBoxCalculations);
-  const [rmPurchaseRecords, setRmPurchaseRecords] = useState<EmployeeBRmPurchaseRecord[]>(() => persistedState?.rmPurchaseRecords ?? defaultRmPurchaseRecords);
-  const [sachetPurchaseRecords, setSachetPurchaseRecords] = useState<EmployeeBSachetPurchaseRecord[]>(() => persistedState?.sachetPurchaseRecords ?? defaultSachetPurchaseRecords);
-  const [boxPurchaseRecords, setBoxPurchaseRecords] = useState<EmployeeBBoxPurchaseRecord[]>(() => persistedState?.boxPurchaseRecords ?? defaultBoxPurchaseRecords);
-  const [goodsReceiptRecords, setGoodsReceiptRecords] = useState<GoodsReceiptRecord[]>(() => persistedState?.goodsReceiptRecords ?? []);
-  const [productionIssueRecords, setProductionIssueRecords] = useState<ProductionIssueRecord[]>(() => persistedState?.productionIssueRecords ?? []);
-  const [productionReturnRecords, setProductionReturnRecords] = useState<ProductionReturnRecord[]>(() => persistedState?.productionReturnRecords ?? []);
-  const [inventoryTransactions, setInventoryTransactions] = useState<InventoryTransactionRecord[]>(() => persistedState?.inventoryTransactions ?? []);
-  const [materialTestSlips, setMaterialTestSlips] = useState<MaterialTestSlip[]>(() => persistedState?.materialTestSlips ?? []);
+  const [manufacturers, setManufacturers] = useState<Manufacturer[]>(() => defaultManufacturers);
+  const [materials, setMaterials] = useState<Material[]>(() => defaultMaterials);
+  const [vendors, setVendors] = useState<Vendor[]>(() => defaultVendors);
+  const [vendorHistoryRecords, setVendorHistoryRecords] = useState<VendorHistoryRecord[]>(() => defaultVendorHistoryRecords);
+  const [recipes, setRecipes] = useState<Recipe[]>(() => defaultRecipes);
+  const [productionPlans, setProductionPlans] = useState<ProductionPlan[]>(() => defaultProductionPlans);
+  const [productionCalculations, setProductionCalculations] = useState<ProductionCalculation[]>(() => defaultProductionCalculations);
+  const [requirementReportSelection, setRequirementReportSelection] = useState<RequirementReportSelection>(() => defaultRequirementReportSelection);
+  const [assortedBoxCalculations, setAssortedBoxCalculations] = useState<AssortedBoxCalculation[]>(() => defaultAssortedBoxCalculations);
+  const [rmPurchaseRecords, setRmPurchaseRecords] = useState<EmployeeBRmPurchaseRecord[]>(() => defaultRmPurchaseRecords);
+  const [sachetPurchaseRecords, setSachetPurchaseRecords] = useState<EmployeeBSachetPurchaseRecord[]>(() => defaultSachetPurchaseRecords);
+  const [boxPurchaseRecords, setBoxPurchaseRecords] = useState<EmployeeBBoxPurchaseRecord[]>(() => defaultBoxPurchaseRecords);
+  const [goodsReceiptRecords, setGoodsReceiptRecords] = useState<GoodsReceiptRecord[]>(() => []);
+  const [productionIssueRecords, setProductionIssueRecords] = useState<ProductionIssueRecord[]>(() => []);
+  const [productionReturnRecords, setProductionReturnRecords] = useState<ProductionReturnRecord[]>(() => []);
+  const [inventoryTransactions, setInventoryTransactions] = useState<InventoryTransactionRecord[]>(() => []);
+  const [materialTestSlips, setMaterialTestSlips] = useState<MaterialTestSlip[]>(() => []);
+  const [rndSampleRequirements, setRndSampleRequirements] = useState<RndSampleRequirementRecord[]>(() => []);
+  const [sampleDispatchRecords, setSampleDispatchRecords] = useState<SampleDispatchRecord[]>(() => []);
+  const [sampleReceiptInventory, setSampleReceiptInventory] = useState<SampleReceiptInventoryRecord[]>(() => []);
+  const [rndBaseFormulas, setRndBaseFormulas] = useState<SavedBaseFormulaRecord[]>(() => []);
+  const [rndTrials, setRndTrials] = useState<SavedTrialRecord[]>(() => []);
+  const [rndFormulaVersions, setRndFormulaVersions] = useState<FormulaVersionRecord[]>(() => []);
+  const [rndSampleInventory, setRndSampleInventory] = useState<RndSampleInventoryRecord[]>(() => []);
+  const [ready, setReady] = useState(false);
+  const syncedStateRef = useRef<Record<string, unknown>>({});
+  const writeQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const applySnapshot = useCallback((snapshot: Record<string, unknown>) => {
+    const array = (name: string) => Array.isArray(snapshot[name]) ? (snapshot[name] as unknown[]).filter(item => item !== null && typeof item === 'object' && !Array.isArray(item)) : [];
+    const selection = snapshot.requirementReportSelection;
+    syncedStateRef.current = cloneState(snapshot);
+    setCategories(array('categories') as Category[]);
+    setProducts(array('products') as Product[]);
+    setFlavours(array('flavours') as Flavour[]);
+    setManufacturers(array('manufacturers') as Manufacturer[]);
+    setMaterials(array('materials') as Material[]);
+    setVendors((array('vendors') as Vendor[]).map(vendor => ({
+      ...vendor,
+      vendorTypes: Array.isArray(vendor.vendorTypes) ? vendor.vendorTypes : [],
+      materialIds: Array.isArray(vendor.materialIds) ? vendor.materialIds : [],
+      documents: vendor.documents && typeof vendor.documents === 'object' ? vendor.documents : { gstCertificate: '', fssaiCertificate: '', coaSample: '', agreement: '', otherDocuments: '' },
+    })));
+    setVendorHistoryRecords(array('vendorHistoryRecords') as VendorHistoryRecord[]);
+    setRecipes((array('recipes') as Recipe[]).map(normalizeRecipeMaterialUnits));
+    setProductionPlans(array('productionPlans') as ProductionPlan[]);
+    setProductionCalculations(array('productionCalculations') as ProductionCalculation[]);
+    setRequirementReportSelection(selection && !Array.isArray(selection) && typeof selection === 'object' ? {
+      selectedRecipeIds: Array.isArray((selection as RequirementReportSelection).selectedRecipeIds) ? (selection as RequirementReportSelection).selectedRecipeIds : [],
+      productionQtyByRecipe: (selection as RequirementReportSelection).productionQtyByRecipe && typeof (selection as RequirementReportSelection).productionQtyByRecipe === 'object' ? (selection as RequirementReportSelection).productionQtyByRecipe : {},
+    } : defaultRequirementReportSelection);
+    setAssortedBoxCalculations(array('assortedBoxCalculations') as AssortedBoxCalculation[]);
+    setRmPurchaseRecords(array('rmPurchaseRecords') as EmployeeBRmPurchaseRecord[]);
+    setSachetPurchaseRecords(array('sachetPurchaseRecords') as EmployeeBSachetPurchaseRecord[]);
+    setBoxPurchaseRecords(array('boxPurchaseRecords') as EmployeeBBoxPurchaseRecord[]);
+    setGoodsReceiptRecords(array('goodsReceiptRecords') as GoodsReceiptRecord[]);
+    setProductionIssueRecords(array('productionIssueRecords') as ProductionIssueRecord[]);
+    setProductionReturnRecords(array('productionReturnRecords') as ProductionReturnRecord[]);
+    setInventoryTransactions(array('inventoryTransactions') as InventoryTransactionRecord[]);
+    setMaterialTestSlips(array('materialTestSlips') as MaterialTestSlip[]);
+    setRndSampleRequirements(array('rndSampleRequirements') as RndSampleRequirementRecord[]);
+    setSampleDispatchRecords(array('sampleDispatchRecords') as SampleDispatchRecord[]);
+    setSampleReceiptInventory(array('sampleReceiptInventory') as SampleReceiptInventoryRecord[]);
+    setRndBaseFormulas((array('rndBaseFormulas') as SavedBaseFormulaRecord[]).map(record => ({ ...record, ingredients: Array.isArray(record.ingredients) ? record.ingredients : [] })));
+    setRndTrials((array('rndTrials') as SavedTrialRecord[]).map(record => ({ ...record, ingredients: Array.isArray(record.ingredients) ? record.ingredients : [] })));
+    setRndFormulaVersions((array('rndFormulaVersions') as FormulaVersionRecord[]).map(record => ({ ...record, ingredients: Array.isArray(record.ingredients) ? record.ingredients : [] })));
+    setRndSampleInventory((array('rndSampleInventory') as RndSampleInventoryRecord[]).map(record => ({ ...record, history: Array.isArray(record.history) ? record.history : [] })));
+  }, []);
 
   useEffect(() => {
-    writePersistedState({
-      categories,
-      products,
-      flavours,
-      manufacturers,
-      materials,
-      vendors,
-      vendorHistoryRecords,
-      recipes,
-      productionPlans,
-      productionCalculations,
-      requirementReportSelection,
-      assortedBoxCalculations,
-      rmPurchaseRecords,
-      sachetPurchaseRecords,
-      boxPurchaseRecords,
-      goodsReceiptRecords,
-      productionIssueRecords,
-      productionReturnRecords,
-      inventoryTransactions,
-      materialTestSlips,
-    });
-  }, [
-    categories,
-    products,
-    flavours,
-    manufacturers,
-    materials,
-    vendors,
-    vendorHistoryRecords,
-    recipes,
-    productionPlans,
-    productionCalculations,
-    requirementReportSelection,
-    assortedBoxCalculations,
-    rmPurchaseRecords,
-    sachetPurchaseRecords,
-    boxPurchaseRecords,
-    goodsReceiptRecords,
-    productionIssueRecords,
-    productionReturnRecords,
-    inventoryTransactions,
-    materialTestSlips,
-  ]);
+    if (!isAuthenticated) {
+      setReady(false);
+      syncedStateRef.current = {};
+      return;
+    }
+    let cancelled = false;
+    const loadAll = async () => {
+      if (!apiBase) return;
+      try {
+        const response = await api.get<Record<string, unknown>>('/api/state/snapshot');
+        if (cancelled) return;
+        applySnapshot(response.data);
+        setReady(true);
+      } catch {
+        if (!cancelled) setReady(false);
+      }
+    };
+    void loadAll();
+    return () => { cancelled = true; };
+  }, [applySnapshot, isAuthenticated]);
 
-  const notifyDeleteBlocked = (message: string) => {
-    window.alert(message);
-  };
+  useEffect(() => {
+    if (!ready || !apiBase) return;
+    const current: Record<string, unknown> = {
+      categories, products, flavours, manufacturers, materials, vendors, vendorHistoryRecords, recipes,
+      productionPlans, productionCalculations, requirementReportSelection, assortedBoxCalculations,
+      rmPurchaseRecords, sachetPurchaseRecords, boxPurchaseRecords, goodsReceiptRecords,
+      productionIssueRecords, productionReturnRecords, inventoryTransactions, materialTestSlips,
+      rndSampleRequirements, sampleDispatchRecords, sampleReceiptInventory, rndBaseFormulas, rndTrials, rndFormulaVersions, rndSampleInventory,
+    };
+    const operations = COLLECTIONS.flatMap(collection => diffCollection(collection, syncedStateRef.current[collection], current[collection]));
+    if (operations.length === 0) return;
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    syncTimerRef.current = setTimeout(() => {
+      const nextBaseline = cloneState(current);
+      syncedStateRef.current = { ...syncedStateRef.current, ...nextBaseline };
+      writeQueueRef.current = writeQueueRef.current.then(async () => {
+        try {
+          await api.patch('/api/state', { operations });
+        } catch {
+          const response = await api.get<Record<string, unknown>>('/api/state/snapshot');
+          applySnapshot(response.data);
+        }
+      });
+    }, 50);
+    return () => {
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    };
+  }, [applySnapshot, assortedBoxCalculations, boxPurchaseRecords, categories, flavours, goodsReceiptRecords, inventoryTransactions, materialTestSlips, materials, manufacturers, products, productionCalculations, productionIssueRecords, productionPlans, productionReturnRecords, ready, recipes, requirementReportSelection, rmPurchaseRecords, rndBaseFormulas, rndFormulaVersions, rndSampleInventory, rndSampleRequirements, rndTrials, sachetPurchaseRecords, sampleDispatchRecords, sampleReceiptInventory, vendorHistoryRecords, vendors]);
 
+  useEffect(() => {
+    if (!ready || !isAuthenticated) return;
+    const refresh = () => {
+      void writeQueueRef.current.then(async () => {
+        const response = await api.get<Record<string, unknown>>('/api/state/snapshot');
+        if (JSON.stringify(response.data) !== JSON.stringify(syncedStateRef.current)) {
+          applySnapshot(response.data);
+        }
+      }).catch(() => undefined);
+    };
+    const interval = window.setInterval(refresh, 5000);
+    window.addEventListener('focus', refresh);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refresh);
+    };
+  }, [applySnapshot, isAuthenticated, ready]);
   const resolveInventoryMaterialId = useCallback((input: {
     sourceType?: GoodsReceiptMaterialType;
     sourceId?: string;
@@ -1192,10 +1269,16 @@ export const ErpProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     ]);
   };
 
+  const upsertById = <T extends { id: string }>(rows: T[], record: T) => rows.some(item => item.id === record.id)
+    ? rows.map(item => item.id === record.id ? record : item)
+    : [...rows, record];
+
   return (
     <ErpContext.Provider value={{
-      categories, products, flavours, manufacturers, materials, vendors, vendorHistoryRecords, recipes, productionPlans, productionCalculations, requirementReportSelection, assortedBoxCalculations, rmPurchaseRecords, sachetPurchaseRecords, boxPurchaseRecords, goodsReceiptRecords, productionIssueRecords, productionReturnRecords, inventoryTransactions, materialTestSlips,
-      addCategory: (c) => setCategories(prev => [...prev, c]),
+      categories, products, flavours, manufacturers, materials, vendors, vendorHistoryRecords, recipes, productionPlans, productionCalculations, requirementReportSelection, assortedBoxCalculations, rmPurchaseRecords, sachetPurchaseRecords, boxPurchaseRecords, goodsReceiptRecords, productionIssueRecords, productionReturnRecords, inventoryTransactions, materialTestSlips, rndSampleRequirements, sampleDispatchRecords, sampleReceiptInventory, rndBaseFormulas, rndTrials, rndFormulaVersions, rndSampleInventory,
+      addCategory: (c) => {
+        setCategories(prev => [...prev, c]);
+      },
       updateCategory,
       removeCategory,
       addProduct: (p) => setProducts(prev => [...prev, p]),
@@ -1230,6 +1313,13 @@ export const ErpProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       saveMaterialTestDecision,
       saveProductionIssue,
       saveProductionReturn,
+      saveRndSampleRequirement: record => setRndSampleRequirements(previous => upsertById(previous, record)),
+      saveSampleDispatch: record => setSampleDispatchRecords(previous => upsertById(previous, record)),
+      saveSampleReceiptInventory: record => setSampleReceiptInventory(previous => upsertById(previous, record)),
+      saveRndBaseFormula: record => setRndBaseFormulas(previous => upsertById(previous, record)),
+      saveRndTrial: record => setRndTrials(previous => upsertById(previous, record)),
+      saveRndFormulaVersion: record => setRndFormulaVersions(previous => upsertById(previous, record)),
+      saveRndSampleInventory: record => setRndSampleInventory(previous => upsertById(previous, record)),
       generateProductionSummary,
     }}>
       {children}

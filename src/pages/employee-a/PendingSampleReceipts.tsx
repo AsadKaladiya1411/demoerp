@@ -8,11 +8,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useAuth } from '@/context/AuthContext';
+import { useErpData } from '@/context/ErpContext';
 import {
-  getPendingSampleReceiptRecords,
-  getReceivedSampleReceiptRecords,
-  getSampleInventoryRecords,
-  receiveSampleFromDispatch,
   type SampleDispatchRecord,
   type SampleInventoryRecord,
 } from './sampleInventoryStore';
@@ -54,9 +51,9 @@ const createReceiptForm = (): ReceiptForm => ({
 
 export function PendingSampleReceipts() {
   const { currentUser } = useAuth();
-  const [pendingReceipts, setPendingReceipts] = useState<SampleDispatchRecord[]>(() => getPendingSampleReceiptRecords());
-  const [receivedReceipts, setReceivedReceipts] = useState<SampleDispatchRecord[]>(() => getReceivedSampleReceiptRecords());
-  const [inventory, setInventory] = useState<SampleInventoryRecord[]>(() => getSampleInventoryRecords());
+  const { sampleDispatchRecords, sampleReceiptInventory: inventory, saveSampleDispatch, saveSampleReceiptInventory, rndSampleInventory, saveRndSampleInventory } = useErpData();
+  const pendingReceipts = sampleDispatchRecords.filter(record => record.status === 'Sent to R&D');
+  const receivedReceipts = sampleDispatchRecords.filter(record => record.status === 'Received by R&D');
   const [receiptMode, setReceiptMode] = useState<ReceiptMode>('receive');
   const [receiptDialogOpen, setReceiptDialogOpen] = useState(false);
   const [activeDispatchId, setActiveDispatchId] = useState('');
@@ -77,12 +74,6 @@ export function PendingSampleReceipts() {
     () => receivedReceipts.find(record => record.dispatchId === activeDispatchId) || null,
     [activeDispatchId, receivedReceipts],
   );
-
-  const refreshData = () => {
-    setPendingReceipts(getPendingSampleReceiptRecords());
-    setReceivedReceipts(getReceivedSampleReceiptRecords());
-    setInventory(getSampleInventoryRecords());
-  };
 
   const resetForm = () => {
     setForm(createReceiptForm());
@@ -148,18 +139,39 @@ export function PendingSampleReceipts() {
       return;
     }
 
-    const updatedRecord = receiveSampleFromDispatch(form.dispatchId, {
-      receiveDate: form.receiveDate,
-      receivedBy: form.receivedBy,
-      remarks: form.remarks,
-    });
-
-    if (!updatedRecord) {
+    const dispatch = sampleDispatchRecords.find(record => record.dispatchId === form.dispatchId);
+    if (!dispatch) {
       setMessage('Dispatch record not found.');
       return;
     }
-
-    refreshData();
+    saveSampleDispatch({ ...dispatch, status: 'Received by R&D', receipt: { receiveDate: form.receiveDate, receivedBy: form.receivedBy, remarks: form.remarks } });
+    const existingInventory = inventory.find(item => item.materialName === dispatch.materialName && item.unit === dispatch.unit);
+    const receiptInventory: SampleInventoryRecord = existingInventory
+      ? { ...existingInventory, availableQuantity: Number((existingInventory.availableQuantity + quantity).toFixed(2)), receiveDate: form.receiveDate, sourcePO: dispatch.poNumber, requirementId: dispatch.requirementId }
+      : { id: `INV-${String(inventory.length + 1).padStart(4, '0')}`, materialName: dispatch.materialName, availableQuantity: Number(quantity.toFixed(2)), unit: dispatch.unit, receiveDate: form.receiveDate, sourcePO: dispatch.poNumber, requirementId: dispatch.requirementId };
+    saveSampleReceiptInventory(receiptInventory);
+    const existingRndSample = rndSampleInventory.find(item => item.rawMaterialName === dispatch.materialName && item.unit === dispatch.unit);
+    const rndBalance = (existingRndSample?.currentBalance || 0) + quantity;
+    saveRndSampleInventory(existingRndSample ? {
+      ...existingRndSample,
+      receivedQuantity: existingRndSample.receivedQuantity + quantity,
+      currentBalance: rndBalance,
+      status: rndBalance < 10 ? 'Low Stock' : 'Available',
+      history: [{ id: `hist-${Date.now()}`, date: form.receiveDate, action: 'Receive Sample', quantity, balance: rndBalance, remarks: form.remarks || 'Sample received' }, ...(existingRndSample.history || [])],
+    } : {
+      id: `sample-${Date.now()}`,
+      sampleId: `SMP-${String(rndSampleInventory.length + 1).padStart(4, '0')}`,
+      rawMaterialId: dispatch.requirementId,
+      rawMaterialName: dispatch.materialName,
+      manufacturer: '',
+      batchNumber: dispatch.poNumber,
+      receivedDate: form.receiveDate,
+      receivedQuantity: quantity,
+      unit: dispatch.unit,
+      currentBalance: quantity,
+      status: quantity < 10 ? 'Low Stock' : 'Available',
+      history: [{ id: `hist-${Date.now()}`, date: form.receiveDate, action: 'Receive Sample', quantity, balance: quantity, remarks: form.remarks || 'Sample received' }],
+    });
     setReceiptMode('view');
     setMessage('Sample received by R&D.');
   };

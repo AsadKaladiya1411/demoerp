@@ -6,13 +6,10 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useAuth } from '@/context/AuthContext';
+import { useErpData } from '@/context/ErpContext';
 import { Archive, BookOpen, GitCompareArrows, Plus } from 'lucide-react';
 import {
-  archiveFormulaVersion,
   buildFormulaVersionFromApprovedTrial,
-  getApprovedTrials,
-  getFormulaVersions,
-  saveFormulaVersion,
   type FormulaVersionRecord,
 } from './rndStore';
 
@@ -42,32 +39,18 @@ const mergeIngredientNames = (left: FormulaVersionRecord, right: FormulaVersionR
 
 export function FormulaLibrary() {
   const { currentUser } = useAuth();
-  const [formulaVersions, setFormulaVersions] = useState<FormulaVersionRecord[]>(() => getFormulaVersions());
-  const [approvedTrials, setApprovedTrials] = useState(() => getApprovedTrials());
+  const { rndFormulaVersions: formulaVersions, rndTrials, rndBaseFormulas, saveRndFormulaVersion } = useErpData();
+  const approvedTrials = rndTrials.filter(trial => trial.assessment?.verdict === 'Approved for Next Stage');
   const [selectedProductFilter, setSelectedProductFilter] = useState('all');
   const [createOpen, setCreateOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
-  const [selectedTrialId, setSelectedTrialId] = useState(() => getApprovedTrials()[0]?.trialId || '');
+  const [selectedTrialId, setSelectedTrialId] = useState('');
   const [compareProductId, setCompareProductId] = useState('all');
   const [compareLeftId, setCompareLeftId] = useState('');
   const [compareRightId, setCompareRightId] = useState('');
   const [message, setMessage] = useState('');
 
   const canMutate = currentUser.role === 'Employee A';
-
-  const refreshData = () => {
-    const nextVersions = getFormulaVersions();
-    const nextTrials = getApprovedTrials();
-    setFormulaVersions(nextVersions);
-    setApprovedTrials(nextTrials);
-    if (selectedProductFilter !== 'all' && !nextVersions.some(version => version.productId === selectedProductFilter)) {
-      setSelectedProductFilter('all');
-    }
-    if (compareProductId !== 'all' && !nextVersions.some(version => version.productId === compareProductId)) {
-      setCompareProductId('all');
-    }
-    return { nextVersions, nextTrials };
-  };
 
   const productOptions = useMemo(() => {
     const products = new Map<string, string>();
@@ -91,9 +74,7 @@ export function FormulaLibrary() {
   const compareRight = compareVersions.find(version => version.id === compareRightId) || compareVersions[1] || null;
 
   const openCreateDialog = () => {
-    const nextTrials = getApprovedTrials();
-    setApprovedTrials(nextTrials);
-    setSelectedTrialId(nextTrials[0]?.trialId || '');
+    setSelectedTrialId(approvedTrials[0]?.trialId || '');
     setMessage('');
     setCreateOpen(true);
   };
@@ -104,25 +85,25 @@ export function FormulaLibrary() {
       return;
     }
 
-    const record = buildFormulaVersionFromApprovedTrial(selectedTrialId, currentUser.name);
+    const record = buildFormulaVersionFromApprovedTrial(selectedTrialId, currentUser.name, rndTrials, rndBaseFormulas, formulaVersions);
     if (!record) {
       setMessage('Only approved trials can be stored as formula versions.');
       return;
     }
 
-    saveFormulaVersion(record);
-    const { nextVersions } = refreshData();
+    formulaVersions.filter(version => version.productId === record.productId && version.status === 'Current').forEach(version => saveRndFormulaVersion({ ...version, status: 'Archived' }));
+    saveRndFormulaVersion(record);
     setSelectedProductFilter(record.productId);
     setCompareProductId(record.productId);
     setCompareLeftId(record.id);
-    setCompareRightId(nextVersions.find(version => version.productId === record.productId && version.id !== record.id)?.id || '');
+    setCompareRightId(formulaVersions.find(version => version.productId === record.productId && version.id !== record.id)?.id || '');
     setMessage(`Formula ${record.formulaId} created from ${record.trialReference}.`);
     setCreateOpen(false);
   };
 
   const handleArchiveVersion = (formulaId: string) => {
-    archiveFormulaVersion(formulaId);
-    refreshData();
+    const formula = formulaVersions.find(version => version.id === formulaId);
+    if (formula) saveRndFormulaVersion({ ...formula, status: 'Archived' });
     setMessage('Version archived.');
   };
 

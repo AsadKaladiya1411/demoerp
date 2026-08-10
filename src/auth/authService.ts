@@ -1,29 +1,23 @@
-import { DEMO_USERS } from './login';
-import type { DemoUser } from './login';
+import type { AppUser, Role } from './types';
 
 const STORAGE_KEY = 'jolly_auth_user';
 
-export function findUserByUsername(username: string): DemoUser | undefined {
-  return DEMO_USERS.find(u => u.username.toLowerCase() === username.toLowerCase());
-}
+export type StoredSession = AppUser & { token: string };
 
-export function validateCredentials(username: string, password: string): DemoUser | null {
-  const user = findUserByUsername(username);
-  if (!user) return null;
-  return user.password === password ? user : null;
-}
+const roles = new Set<Role>(['Boss', 'Employee A', 'Employee B', 'Employee C', 'Employee D']);
 
-export function saveAuthenticatedUser(user: DemoUser) {
-  // store minimal info
-  const payload = { id: user.id, name: user.name, role: user.role };
+export function saveAuthenticatedUser(user: AppUser, token: string) {
+  const payload = { id: user.id, name: user.name, role: user.role, token };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
 }
 
-export function loadAuthenticatedUser(): { id: string; name: string; role: DemoUser['role'] } | null {
+export function loadAuthenticatedUser(): StoredSession | null {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) return null;
   try {
-    return JSON.parse(raw);
+    const value = JSON.parse(raw) as Partial<StoredSession>;
+    if (!value.id || !value.name || !value.token || !value.role || !roles.has(value.role)) return null;
+    return value as StoredSession;
   } catch {
     return null;
   }

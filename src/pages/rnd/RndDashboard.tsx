@@ -3,14 +3,16 @@ import { FlaskConical, PackageOpen, FileText, CheckCircle, Clock3, Boxes, Archiv
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts';
 import { getFormulaStatusChartData, getRndMetrics, getSampleStatusChartData, getTrialStatusChartData } from './rndReportsData';
+import { useErpData } from '@/context/ErpContext';
 
 const COLORS = ['#0f766e', '#2563eb', '#f59e0b', '#16a34a', '#dc2626'];
 
 export function RndDashboard() {
-  const metrics = getRndMetrics();
-  const formulaStatus = useMemo(() => getFormulaStatusChartData(), []);
-  const trialStatus = useMemo(() => getTrialStatusChartData(), []);
-  const sampleStatus = useMemo(() => getSampleStatusChartData(), []);
+  const { rndBaseFormulas, rndFormulaVersions, rndTrials, rndSampleInventory } = useErpData();
+  const metrics = getRndMetrics(rndBaseFormulas, rndFormulaVersions, rndTrials, rndSampleInventory);
+  const formulaStatus = useMemo(() => getFormulaStatusChartData(rndFormulaVersions), [rndFormulaVersions]);
+  const trialStatus = useMemo(() => getTrialStatusChartData(rndTrials), [rndTrials]);
+  const sampleStatus = useMemo(() => getSampleStatusChartData(rndSampleInventory), [rndSampleInventory]);
 
   const summaryCards = [
     { title: 'Total Products', value: metrics.totalProducts, icon: Boxes },

@@ -5,8 +5,9 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useAuth } from '@/context/AuthContext';
+import { useErpData } from '@/context/ErpContext';
 import { CheckCircle2, Microscope, Save } from 'lucide-react';
-import { getTrialById, getTrialRecords, saveTrialAssessment, type SavedTrialRecord, type TrialAssessmentRecord, type TrialAssessmentVerdict } from './rndStore';
+import { type SavedTrialRecord, type TrialAssessmentRecord, type TrialAssessmentVerdict } from './rndStore';
 
 const verdictOptions: TrialAssessmentVerdict[] = ['Pass', 'Fail', 'Need Modification', 'Approved for Next Stage'];
 
@@ -32,19 +33,17 @@ const formatTrialLabel = (trial: SavedTrialRecord) => `${trial.trialId} - ${tria
 
 export function TrialAssessment() {
   const { currentUser } = useAuth();
-  const [trials, setTrials] = useState<SavedTrialRecord[]>(() => getTrialRecords());
-  const [selectedTrialId, setSelectedTrialId] = useState(() => getTrialRecords()[0]?.trialId || '');
+  const { rndTrials: trials, saveRndTrial } = useErpData();
+  const [selectedTrialId, setSelectedTrialId] = useState('');
   const [assessment, setAssessment] = useState<TrialAssessmentRecord>(createEmptyAssessment);
   const [message, setMessage] = useState('');
 
   const canMutate = currentUser.role === 'Employee A';
   const selectedTrial = useMemo(() => trials.find(trial => trial.trialId === selectedTrialId) || null, [selectedTrialId, trials]);
 
-  const refreshTrials = () => {
-    const latestTrials = getTrialRecords();
-    setTrials(latestTrials);
-    return latestTrials;
-  };
+  useEffect(() => {
+    if (!selectedTrialId && trials.length > 0) setSelectedTrialId(trials[0].trialId);
+  }, [selectedTrialId, trials]);
 
   useEffect(() => {
     if (!selectedTrialId || !selectedTrial) {
@@ -61,7 +60,7 @@ export function TrialAssessment() {
 
   const handleTrialChange = (trialId: string) => {
     setSelectedTrialId(trialId);
-    const nextTrial = getTrialById(trialId);
+    const nextTrial = trials.find(trial => trial.trialId === trialId);
     setAssessment(nextTrial?.assessment ? { ...nextTrial.assessment } : createEmptyAssessment());
     setMessage('');
   };
@@ -72,11 +71,9 @@ export function TrialAssessment() {
       return;
     }
 
-    saveTrialAssessment(selectedTrial.trialId, assessment);
-    const latestTrials = refreshTrials();
-    const latestTrial = latestTrials.find(trial => trial.trialId === selectedTrial.trialId) || selectedTrial;
-    setSelectedTrialId(latestTrial.trialId);
-    setMessage(`Assessment saved for ${latestTrial.trialId}.`);
+    saveRndTrial({ ...selectedTrial, assessment: { ...assessment } });
+    setSelectedTrialId(selectedTrial.trialId);
+    setMessage(`Assessment saved for ${selectedTrial.trialId}.`);
   };
 
   return (

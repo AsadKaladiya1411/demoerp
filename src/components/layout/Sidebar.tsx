@@ -55,7 +55,10 @@ export function Sidebar() {
   ];
   // Build employee A links by selecting relevant core links (Employee A permissions)
   const employeeALinkPermissions: Permission[] = ['dashboard', 'categories', 'products', 'recipes', 'assortedConfiguration', 'reports', 'masterReport'];
-  const employeeALinks = defaultLinks.filter(l => employeeALinkPermissions.includes(l.permission));
+  const employeeALinks = [
+    ...defaultLinks.filter(l => employeeALinkPermissions.includes(l.permission)),
+    { name: 'Pending Sample Receipts', href: '/employee-a/pending-sample-receipts', icon: Inbox, permission: 'employeeASampleInventory' as Permission },
+  ];
 
   const links = currentUser.role === 'Employee B' ? employeeBLinks : currentUser.role === 'Employee C' ? employeeCLinks : currentUser.role === 'Employee D' ? employeeDLinks : defaultLinks;
   const showRndSection = currentUser.role === 'Boss' || currentUser.role === 'Employee A';
