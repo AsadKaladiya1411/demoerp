@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import { saveAuthenticatedUser, loadAuthenticatedUser, clearAuthenticatedUser } from './authService';
 import type { AppUser, Role } from './types';
+import { getApiBase } from '@/lib/config';
 
 export type { AppUser, Role } from './types';
 export type Permission =
@@ -73,8 +74,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return;
       }
       try {
-        const apiUrl = (import.meta as ImportMeta & { env: Record<string, string | undefined> }).env?.VITE_API_URL || '';
-        const response = await fetch(`${apiUrl.replace(/\/$/, '')}/api/session`, { headers: { Authorization: `Bearer ${stored.token}` } });
+        const response = await fetch(`${getApiBase()}/api/session`, { headers: { Authorization: `Bearer ${stored.token}` } });
         if (!response.ok) throw new Error('Session expired');
         const body = await response.json() as { user?: AppUser };
         if (!body.user || cancelled) return;
@@ -99,9 +99,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const login = async (username: string, password: string) => {
     try {
-      const apiUrl = (import.meta as ImportMeta & { env: Record<string, string | undefined> }).env?.VITE_API_URL || '';
-      if (!apiUrl) return { success: false, message: 'VITE_API_URL not configured' };
-      const res = await fetch(`${apiUrl.replace(/\/$/, '')}/api/login`, {
+      const res = await fetch(`${getApiBase()}/api/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
@@ -116,8 +114,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setCurrentUser({ id: user.id, name: user.name, role: user.role });
       setIsAuthenticated(true);
       return { success: true };
-    } catch {
-      return { success: false, message: 'Login failed' };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Login failed';
+      return { success: false, message };
     }
   };
 

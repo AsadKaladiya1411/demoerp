@@ -1,6 +1,7 @@
 import axios from 'axios';
+import { apiBase } from './config';
 
-export const apiBase = ((import.meta as ImportMeta & { env: Record<string, string | undefined> }).env?.VITE_API_URL || '').replace(/\/$/, '');
+export { apiBase };
 
 export function getAuthHeader() {
   try {
@@ -16,8 +17,9 @@ export function getAuthHeader() {
 export const api = axios.create({ baseURL: apiBase });
 
 api.interceptors.request.use(config => {
-  config.headers.set('Authorization', getAuthHeader().Authorization);
-  if (!getAuthHeader().Authorization) config.headers.delete('Authorization');
+  const authorization = getAuthHeader().Authorization;
+  if (authorization) config.headers.set('Authorization', authorization);
+  else config.headers.delete('Authorization');
   return config;
 });
 

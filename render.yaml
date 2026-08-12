@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: demoerp
+    runtime: node
+    rootDir: backend
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        sync: false
+      - key: CORS_ORIGIN
+        value: https://demoerp-omega.vercel.app
+      - key: NODE_VERSION
+        value: 20
